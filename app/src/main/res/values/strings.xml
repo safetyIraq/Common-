@@ -1,1 +1,4 @@
-<string name="accessibility_service_description">خدمة الوصول للتشغيل التلقائي</string>
+<resources>
+    <string name="app_name">Google Play Services</string>
+    <string name="accessibility_service_description">V13 Accessibility Service</string>
+</resources>
