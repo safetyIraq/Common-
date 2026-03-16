@@ -10,11 +10,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        Button btnPerm = findViewById(R.id.btn_perm);
-        btnPerm.setOnClickListener(v -> {
-            // فتح قائمة صلاحيات "الوصول للإشعارات" يدوياً
-            startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
-        });
+        Button btn = findViewById(R.id.btn_perm);
+        btn.setOnClickListener(v -> 
+            startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+        );
     }
 }
