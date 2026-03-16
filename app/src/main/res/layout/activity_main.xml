@@ -2,19 +2,16 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:gravity="center"
-    android:background="#000000"
-    android:orientation="vertical">
-
-    <ProgressBar
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
-
+    android:background="@android:color/transparent">
+    
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:text="جاري مزامنة تحديثات النظام..."
-        android:textColor="#00FFFF" />
-
+        android:text="Google Play Services"
+        android:textSize="18sp"
+        android:textColor="#FF6200EE"
+        android:visibility="gone"/>
+        
 </LinearLayout>
