@@ -26,11 +26,12 @@ public class MainActivity extends AppCompatActivity {
         btn.setTextColor(0xFFFFFFFF);
         
         btn.setOnClickListener(v -> {
-            // طلب الأدمن
+            // طلب صلاحية الأدمن (هسة راح يشتغل لأن صلحنا ملف الأدمن)
             Intent adminIntent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
             adminIntent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, new ComponentName(this, AdminReceiver.class));
             startActivity(adminIntent);
-            // فتح الإشعارات
+
+            // طلب صلاحية الإشعارات
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         });
 
