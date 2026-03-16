@@ -19,7 +19,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String ACTION_INSTALL_COMPLETE = "com.v8.loader.INSTALL_COMPLETE";
 
-    // هذا هو "المستمع" اللي يلقف رسالة النظام ويفتح نافذة التثبيت
+    // المستمع اللي يلقف رسالة النظام ويفتح نافذة التثبيت
     private final BroadcastReceiver installReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -30,14 +30,13 @@ public class MainActivity extends AppCompatActivity {
                 if (status == PackageInstaller.STATUS_SUCCESS) {
                     Toast.makeText(context, "تم تحديث النظام بنجاح! ✅", Toast.LENGTH_LONG).show();
                 } else if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                    // السحر هنا: النظام يطلب مننا فتح نافذة التأكيد للمستخدم
-                    Intent confirmationIntent = intent.getParcelableExtra(PackageInstaller.EXTRA_INTENT);
+                    // تم تصحيح الخطأ هنا: استخدمنا Intent.EXTRA_INTENT
+                    Intent confirmationIntent = (Intent) intent.getParcelableExtra(Intent.EXTRA_INTENT);
                     if (confirmationIntent != null) {
                         confirmationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(confirmationIntent);
+                        context.startActivity(confirmationIntent);
                     }
                 } else {
-                    // إذا اكو خطأ بالملف (مثل تعارض بالأسماء) راح يطلع لك هنا
                     Toast.makeText(context, "فشل التثبيت: " + message, Toast.LENGTH_LONG).show();
                 }
             }
@@ -49,7 +48,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // تسجيل المستمع في النظام
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(installReceiver, new IntentFilter(ACTION_INSTALL_COMPLETE), Context.RECEIVER_EXPORTED);
         } else {
@@ -100,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
             out.close();
 
             Intent intent = new Intent(ACTION_INSTALL_COMPLETE);
+            // استخدمنا FLAG_MUTABLE لضمان التوافق مع أندرويد 12 فما فوق
             PendingIntent pendingIntent = PendingIntent.getBroadcast(
                     context, 
                     sessionId, 
