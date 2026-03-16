@@ -15,17 +15,14 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      # إعطاء صلاحية تشغيل محرك Gradle
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      # هنا السحر: راح نستخدم Gradle الجاهز بالسيرفر بدل الملف المفقود
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      # عملية تجميع الكود وصناعة الـ APK
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
+      - name: Build APK
+        run: gradle assembleDebug
 
-      # رفع الملف الناتج حتى تكدر تنزله
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
