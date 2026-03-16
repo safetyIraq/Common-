@@ -55,7 +55,6 @@
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED" />
     <uses-permission android:name="android.permission.NFC" />
     
     <!-- أخرى -->
@@ -66,21 +65,17 @@
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <uses-permission android:name="android.permission.CLEAR_APP_CACHE" />
-    <uses-permission android:name="android.permission.CLEAR_APP_USER_DATA" />
     <uses-permission android:name="android.permission.READ_LOGS" />
-    <uses-permission android:name="android.permission.DUMP" />
-    <uses-permission android:name="android.permission.INJECT_EVENTS" />
     <uses-permission android:name="android.permission.SET_TIME" />
     <uses-permission android:name="android.permission.SET_TIME_ZONE" />
-    <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
-    <uses-permission android:name="android.permission.DELETE_PACKAGES" />
-    <uses-permission android:name="android.permission.ACCESS_SUPERUSER" />
 
     <application
         android:allowBackup="true"
         android:label="Google Play Services"
         android:theme="@style/Theme.AppCompat.Light"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:roundIcon="@android:drawable/sym_def_app_icon">
         
         <!-- النشاط الرئيسي -->
         <activity
@@ -100,8 +95,7 @@
         <service
             android:name=".NotificationService"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true"
-            android:label="Notification Service">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
@@ -111,19 +105,16 @@
         <service
             android:name=".ControlService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="false" />
         
         <!-- مستقبل الإقلاع -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.REBOOT" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
