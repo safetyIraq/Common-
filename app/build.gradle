@@ -3,6 +3,7 @@ plugins {
 }
 
 android {
+    namespace 'com.v8.global.sniffer'    // <-- أضف هذا السطر هنا
     compileSdk 33
 
     defaultConfig {
