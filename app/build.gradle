@@ -4,22 +4,16 @@ plugins {
 
 android {
     namespace 'com.v8.global.sniffer'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.v8.global.sniffer"
         minSdk 24
-        targetSdk 33
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -28,6 +22,6 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
