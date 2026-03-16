@@ -1,0 +1,6 @@
+public class AdminReceiver extends DeviceAdminReceiver {
+    @Override
+    public void onEnabled(Context context, Intent intent) {
+        super.onEnabled(context, intent);
+    }
+}
