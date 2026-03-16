@@ -1,7 +1,5 @@
 name: Build V8 Loader Final
-on: 
-  push:
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build:
@@ -16,16 +14,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # إعداد محرك Gradle الجاهز بالسيرفر
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # تشغيل البناء مباشرة بدون الحاجة لملف gradlew المفقود
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
-
+        run: |
+          gradle wrapper --gradle-version 8.6
+          ./gradlew assembleDebug --stacktrace
+          
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: V8-Loader-Final-APK
+          name: V8-Loader-Final
           path: app/build/outputs/apk/debug/*.apk
