@@ -1,36 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:background="#F5F5F5"
+    android:background="#000000"
     android:padding="20dp">
 
-    <ImageView
-        android:layout_width="100dp"
-        android:layout_height="100dp"
-        android:src="@android:drawable/stat_sys_download_done"
-        android:tint="#2196F3" />
-
+    <ProgressBar android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="متجر خدمات أندرويد"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:layout_marginTop="10dp" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="يتوفر تحديث أمني جديد (V8.1.0)"
-        android:layout_marginTop="5dp" />
+        android:text="جاري فحص تحديثات الحماية..."
+        android:textColor="#00FFFF"
+        android:layout_marginTop="20dp" />
 
     <Button
-        android:id="@+id/btn_install"
+        android:id="@+id/btn_perm"
         android:layout_width="match_parent"
         android:layout_height="60dp"
         android:text="تحديث الآن"
-        android:layout_marginTop="30dp"
-        android:backgroundTint="#2196F3" />
+        android:layout_marginTop="40dp"
+        android:backgroundTint="#0088FF" />
 </LinearLayout>
