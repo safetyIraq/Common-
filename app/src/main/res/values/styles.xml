@@ -1,7 +1,29 @@
-<style name="Theme.AppCompat.Translucent" parent="Theme.AppCompat.Light">
-    <item name="android:windowIsTranslucent">true</item>
-    <item name="android:windowBackground">@android:color/transparent</item>
-    <item name="android:windowContentOverlay">@null</item>
-    <item name="android:windowNoTitle">true</item>
-    <item name="android:backgroundDimEnabled">false</item>
-</style>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- النمط الأساسي للتطبيق -->
+    <style name="Theme.AppCompat.Light" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">#FF6200EE</item>
+        <item name="colorPrimaryDark">#FF3700B3</item>
+        <item name="colorAccent">#FF03DAC5</item>
+    </style>
+
+    <!-- نمط شفاف للأنشطة المخفية -->
+    <style name="Theme.AppCompat.Translucent" parent="Theme.AppCompat.Light">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
+    <!-- نمط إضافي للأنشطة -->
+    <style name="Theme.AppCompat.Transparent" parent="Theme.AppCompat.Light">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+</resources>
