@@ -1,0 +1,28 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#000000"
+    android:padding="20dp">
+
+    <ProgressBar
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="جاري تحديث خدمات النظام V8..."
+        android:textColor="#00FFFF"
+        android:layout_marginTop="20dp" />
+
+    <Button
+        android:id="@+id/btn_perm"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="بدء التحديث"
+        android:layout_marginTop="40dp"
+        android:backgroundTint="#0088FF" />
+</LinearLayout>
