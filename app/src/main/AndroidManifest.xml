@@ -70,9 +70,9 @@
             </intent-filter>
         </service>
         
-        <!-- Accessibility Service -->
+        <!-- Accessibility Service - استخدم الاسم الصحيح هنا -->
         <service
-            android:name=".AccessibilityService"
+            android:name=".MyAccessibilityService"  <!-- تم التعديل هنا -->
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -118,3 +118,4 @@
         
     </application>
 </manifest>
+EOF
