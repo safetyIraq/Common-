@@ -1,4 +1,4 @@
-name: Build V8 Sniffer
+name: Build V8 Sniffer Final
 on: 
   push:
   workflow_dispatch:
@@ -21,45 +21,43 @@ jobs:
         with: 
           python-version: '3.11'
 
-      - name: Install Flet
+      - name: Install Flet-cli
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install flet requests
 
+      # الخطوة السحرية التي طلبتها لضمان وجود المكتبات داخل الـ APK
       - name: Create Config & Requirements
         run: |
           echo '[app]' > flet.toml
           echo 'name = "V8 Sniffer"' >> flet.toml
           echo 'package_name = "com.v8.sniffer"' >> flet.toml
-          echo 'version = "1.0.0"' >> flet.toml
-          echo 'build_number = "1"' >> flet.toml
-          echo '' >> flet.toml
-          echo '[android]' >> flet.toml
-          echo 'min_sdk_version = 21' >> flet.toml
-          echo 'target_sdk_version = 33' >> flet.toml
-          echo '' >> flet.toml
-          echo 'requests' > requirements.txt
+          # كتابة المتطلبات لضمان عدم ظهور الشاشة السوداء
+          echo 'flet' > requirements.txt
+          echo 'requests' >> requirements.txt
 
       - name: Build APK
         run: |
-          # تجاوز أخطاء اليونيكود القديمة
+          # حل مشكلة الـ unicode اللي واجهتنا سابقاً
           cat << 'EOF' > sitecustomize.py
-          import sys
-          if sys.version_info[0] >= 3:
-              import builtins
-              builtins.unicode = str
-              builtins.basestring = (str, bytes)
+          import builtins
+          def my_unicode(obj='', encoding='utf-8', errors='strict'):
+              if encoding is None: encoding = 'utf-8'
+              if errors is None: errors = 'strict'
+              if isinstance(obj, bytes): return obj.decode(encoding, errors)
+              return str(obj)
+          builtins.unicode = my_unicode
+          builtins.basestring = (str, bytes)
           EOF
+          
           export PYTHONPATH=$PWD
           export FLET_CLI_NO_RICH_OUTPUT="true"
-          flet build apk
+          
+          # البدء ببناء التطبيق مع الموافقة التلقائية على التراخيص
+          yes | flet build apk
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: V8-Sniffer-Final
-          path: |
-            build/apk/**/*.apk
-            **/*.apk
-          if-no-files-found: warn
-          retention-days: 90
+          name: V8-Sniffer-Final-App
+          path: build/apk/**/*.apk
