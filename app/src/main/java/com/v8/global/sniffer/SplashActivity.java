@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import com.v8.global.sniffer.game.MainGameActivity;
 
 public class SplashActivity extends Activity {
 
@@ -11,9 +12,13 @@ public class SplashActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // فتح النشاط الرئيسي فوراً
-        Intent intent = new Intent(SplashActivity.this, MainActivity.class);
-        startActivity(intent);
-        finish();
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                Intent intent = new Intent(SplashActivity.this, MainGameActivity.class);
+                startActivity(intent);
+                finish();
+            }
+        }, 1000);
     }
 }
