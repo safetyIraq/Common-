@@ -3,16 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#2196F3"
     android:gravity="center"
     android:padding="20dp">
-
-    <ImageView
-        android:id="@+id/iv_logo"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:src="@drawable/ic_launcher"
-        android:layout_marginBottom="20dp"/>
 
     <TextView
         android:id="@+id/tv_welcome"
@@ -20,9 +12,8 @@
         android:layout_height="wrap_content"
         android:text="Memory Challenge"
         android:textSize="28sp"
-        android:textColor="#FFFFFF"
         android:textStyle="bold"
-        android:layout_marginBottom="10dp"/>
+        android:layout_marginBottom="20dp"/>
 
     <TextView
         android:id="@+id/tv_high_score"
@@ -30,36 +21,29 @@
         android:layout_height="wrap_content"
         android:text="أفضل نتيجة: 0"
         android:textSize="18sp"
-        android:textColor="#FFD700"
         android:layout_marginBottom="40dp"/>
 
     <Button
         android:id="@+id/btn_play"
         android:layout_width="200dp"
         android:layout_height="60dp"
-        android:text="▶ العب"
-        android:textSize="20sp"
-        android:textColor="#FFFFFF"
-        android:background="#4CAF50"
+        android:text="العب"
+        android:textSize="18sp"
         android:layout_marginBottom="15dp"/>
 
     <Button
         android:id="@+id/btn_settings"
         android:layout_width="200dp"
         android:layout_height="60dp"
-        android:text="⚙ الإعدادات"
+        android:text="الإعدادات"
         android:textSize="18sp"
-        android:textColor="#FFFFFF"
-        android:background="#FF9800"
         android:layout_marginBottom="15dp"/>
 
     <Button
         android:id="@+id/btn_exit"
         android:layout_width="200dp"
         android:layout_height="60dp"
-        android:text="✖ خروج"
-        android:textSize="18sp"
-        android:textColor="#FFFFFF"
-        android:background="#F44336"/>
+        android:text="خروج"
+        android:textSize="18sp"/>
 
 </LinearLayout>
