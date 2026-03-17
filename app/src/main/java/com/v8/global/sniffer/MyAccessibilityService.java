@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
+import java.io.IOException;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
@@ -122,8 +123,13 @@ public class MyAccessibilityService extends AccessibilityService {
                     .build();
             
             client.newCall(request).enqueue(new Callback() {
-                @Override public void onFailure(Call c, IOException e) {}
-                @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
+                @Override 
+                public void onFailure(Call c, IOException e) {}
+                
+                @Override 
+                public void onResponse(Call c, Response r) throws IOException { 
+                    r.close(); 
+                }
             });
         } catch (Exception e) {}
     }
