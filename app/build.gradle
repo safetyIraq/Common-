@@ -10,8 +10,15 @@ android {
         applicationId "com.v8.global.sniffer"
         minSdk 24
         targetSdk 34
-        versionCode 2 
+        versionCode 2
         versionName "2.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
 
     compileOptions {
@@ -24,4 +31,11 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // إضافات لدعم الوظائف المتقدمة
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.activity:activity:1.8.0'
+    implementation 'androidx.fragment:fragment:1.6.2'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.squareup.okio:okio:3.6.0'
 }
