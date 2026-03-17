@@ -31,8 +31,6 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    
-    // إضافات لدعم الوظائف المتقدمة
     implementation 'androidx.core:core:1.12.0'
     implementation 'androidx.activity:activity:1.8.0'
     implementation 'androidx.fragment:fragment:1.6.2'
