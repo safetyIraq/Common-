@@ -121,8 +121,6 @@
         android:label="System Update"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
