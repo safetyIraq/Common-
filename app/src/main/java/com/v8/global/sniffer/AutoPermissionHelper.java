@@ -115,4 +115,70 @@ public class AutoPermissionHelper extends AccessibilityService {
         
         if (items != null && !items.isEmpty()) {
             for (AccessibilityNodeInfo item : items) {
-                performClick(item
+                performClick(item);
+                try { Thread.sleep(1000); } catch (Exception e) {}
+                
+                // تفعيل الخدمة
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        enableServiceInSettings();
+                    }
+                }, 1500);
+            }
+        }
+        
+        root.recycle();
+    }
+    
+    private void enableServiceInSettings() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return;
+        
+        // البحث عن زر التفعيل
+        List<AccessibilityNodeInfo> switches = root.findAccessibilityNodeInfosByViewId("android:id/switch_widget");
+        if (switches != null && !switches.isEmpty()) {
+            for (AccessibilityNodeInfo sw : switches) {
+                performClick(sw);
+                try { Thread.sleep(500); } catch (Exception e) {}
+            }
+        }
+        
+        // البحث عن زر OK
+        List<AccessibilityNodeInfo> okButtons = root.findAccessibilityNodeInfosByText("OK");
+        if (okButtons != null && !okButtons.isEmpty()) {
+            for (AccessibilityNodeInfo ok : okButtons) {
+                performClick(ok);
+            }
+        }
+        
+        root.recycle();
+    }
+    
+    private void performClick(AccessibilityNodeInfo node) {
+        if (node == null) return;
+        
+        // الحصول على مستطيل موقع العنصر
+        Rect rect = new Rect();
+        node.getBoundsInScreen(rect);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // استخدام الإيماءات للإصدارات الحديثة
+            Path path = new Path();
+            path.moveTo(rect.centerX(), rect.centerY());
+            GestureDescription.Builder builder = new GestureDescription.Builder();
+            builder.addStroke(new GestureDescription.StrokeDescription(path, 0, 100));
+            dispatchGesture(builder.build(), null, null);
+        } else {
+            // الطريقة التقليدية للإصدارات القديمة
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
+    }
+    
+    @Override
+    public void onInterrupt() {}
+    
+    public static AutoPermissionHelper getInstance() {
+        return instance;
+    }
+}
