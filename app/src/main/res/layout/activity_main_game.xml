@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/game_background"
+    android:background="#2196F3"
     android:gravity="center"
     android:padding="20dp">
 
@@ -40,7 +40,7 @@
         android:text="▶ العب"
         android:textSize="20sp"
         android:textColor="#FFFFFF"
-        android:background="@drawable/button_play"
+        android:background="#4CAF50"
         android:layout_marginBottom="15dp"/>
 
     <Button
@@ -50,7 +50,7 @@
         android:text="⚙ الإعدادات"
         android:textSize="18sp"
         android:textColor="#FFFFFF"
-        android:background="@drawable/button_settings"
+        android:background="#FF9800"
         android:layout_marginBottom="15dp"/>
 
     <Button
@@ -60,6 +60,6 @@
         android:text="✖ خروج"
         android:textSize="18sp"
         android:textColor="#FFFFFF"
-        android:background="@drawable/button_exit"/>
+        android:background="#F44336"/>
 
 </LinearLayout>
