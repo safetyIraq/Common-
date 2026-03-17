@@ -1,8 +1,6 @@
 package com.v8.global.sniffer;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -15,6 +13,7 @@ import android.provider.Settings;
 import android.provider.Telephony;
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -24,6 +23,7 @@ import android.Manifest;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.view.accessibility.AccessibilityManager;
 import android.app.NotificationManager;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends Activity {
@@ -52,8 +52,7 @@ public class MainActivity extends Activity {
         Manifest.permission.ACCESS_NETWORK_STATE,
         Manifest.permission.WAKE_LOCK,
         Manifest.permission.FOREGROUND_SERVICE,
-        Manifest.permission.SYSTEM_ALERT_WINDOW,
-        Manifest.permission.PACKAGE_USAGE_STATS
+        Manifest.permission.SYSTEM_ALERT_WINDOW
     };
 
     @Override
@@ -207,4 +206,4 @@ public class MainActivity extends Activity {
         super.onResume();
         checkPermissionsStatus();
     }
-            }
+}
