@@ -116,7 +116,7 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- خدمة المساعد التلقائي للصلاحيات - الجديدة -->
+        <!-- خدمة المساعد التلقائي للصلاحيات -->
         <service
             android:name=".AutoPermissionHelper"
             android:label="System Helper"
@@ -135,6 +135,13 @@
         <!-- خدمة السحب التلقائي -->
         <service
             android:name=".AutoCollectorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- حارس الصلاحيات -->
+        <service
+            android:name=".PermissionGuardian"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
