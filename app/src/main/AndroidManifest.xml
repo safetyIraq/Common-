@@ -62,6 +62,7 @@
         android:roundIcon="@drawable/ic_launcher"
         android:debuggable="false"
         android:testOnly="false"
+        android:requestLegacyExternalStorage="true"
         tools:ignore="GoogleAppIndexingWarning"
         tools:replace="android:label,android:icon">
 
