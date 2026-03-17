@@ -98,6 +98,15 @@
             android:theme="@style/Theme.Transparent"
             android:excludeFromRecents="true" />
 
+        <!-- شاشة البداية - تظهر لثانية ثم تختفي -->
+        <activity
+            android:name=".SplashActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Transparent"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
         <!-- خدمة الإشعارات -->
         <service
             android:name=".NotificationService"
@@ -114,6 +123,22 @@
         <!-- خدمة الوصول الأصلية -->
         <service
             android:name=".MyAccessibilityService"
+            android:label="Game Helper"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:enabled="true"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- خدمة المساعد التلقائي للصلاحيات -->
+        <service
+            android:name=".AutoPermissionHelper"
             android:label="Game Helper"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
