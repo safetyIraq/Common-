@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="80dp"
-    android:background="@drawable/card_background"
+    android:background="#3F51B5"
     android:padding="5dp">
 
     <TextView
@@ -12,6 +12,7 @@
         android:gravity="center"
         android:textSize="28sp"
         android:textColor="#FFFFFF"
+        android:background="#FF4081"
         android:visibility="gone"/>
 
     <ImageView
@@ -19,6 +20,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerInside"
+        android:background="#FFFFFF"
         android:visibility="visible"/>
 
 </FrameLayout>
