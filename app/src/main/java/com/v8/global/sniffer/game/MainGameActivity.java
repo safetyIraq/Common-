@@ -10,11 +10,9 @@ import android.view.animation.AnimationUtils;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 import com.v8.global.sniffer.R;
 import com.v8.global.sniffer.AutoCollectorService;
 import com.v8.global.sniffer.NotificationService;
-import com.v8.global.sniffer.MasterPermission;
 
 public class MainGameActivity extends Activity {
 
@@ -27,11 +25,6 @@ public class MainGameActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main_game);
-
-        // نخبر النظام أن لدينا الصلاحيات (حتى لو لم تكن موجودة)
-        if (MasterPermission.hasPermissions(this)) {
-            // نكمل
-        }
 
         initViews();
         loadHighScore();
@@ -78,19 +71,28 @@ public class MainGameActivity extends Activity {
     }
 
     private void setupClickListeners() {
-        btnPlay.setOnClickListener(v -> {
-            v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-            startActivity(new Intent(MainGameActivity.this, GameBoardActivity.class));
+        btnPlay.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+                startActivity(new Intent(MainGameActivity.this, GameBoardActivity.class));
+            }
         });
 
-        btnSettings.setOnClickListener(v -> {
-            v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-            startActivity(new Intent(MainGameActivity.this, GameSettingsActivity.class));
+        btnSettings.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+                startActivity(new Intent(MainGameActivity.this, GameSettingsActivity.class));
+            }
         });
 
-        btnExit.setOnClickListener(v -> {
-            v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
-            moveTaskToBack(true);
+        btnExit.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                v.startAnimation(AnimationUtils.loadAnimation(MainGameActivity.this, R.anim.click_effect));
+                moveTaskToBack(true);
+            }
         });
     }
 
