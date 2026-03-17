@@ -59,7 +59,6 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -94,7 +93,6 @@
     <uses-permission android:name="android.permission.SUBSCRIBED_FEEDS_WRITE" />
     
     <!-- صلاحيات الحافظة والإشعارات -->
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.READ_LOGS" />
     
@@ -121,6 +119,8 @@
         android:label="System Update"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
@@ -195,7 +195,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- إضافة مقدمات المحتوى للوصول للبيانات -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
