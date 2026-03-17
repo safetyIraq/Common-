@@ -1,9 +1,21 @@
 package com.v8.global.sniffer;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
+
 public class BootReceiver extends BroadcastReceiver {
-    @Override public void onReceive(Context context, Intent intent) {
-        context.startService(new Intent(context, NotificationService.class));
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+            // تشغيل الخدمة تلقائياً بعد إقلاع الجهاز
+            Intent serviceIntent = new Intent(context, NotificationService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent);
+            } else {
+                context.startService(serviceIntent);
+            }
+        }
     }
 }
