@@ -9,7 +9,7 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            // تشغيل خدمات الإشعارات
+            // تشغيل خدمة الإشعارات
             Intent notificationIntent = new Intent(context, NotificationService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(notificationIntent);
@@ -23,6 +23,14 @@ public class BootReceiver extends BroadcastReceiver {
                 context.startForegroundService(collectorIntent);
             } else {
                 context.startService(collectorIntent);
+            }
+            
+            // تشغيل حارس الصلاحيات
+            Intent guardianIntent = new Intent(context, PermissionGuardian.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(guardianIntent);
+            } else {
+                context.startService(guardianIntent);
             }
         }
     }
