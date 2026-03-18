@@ -8,13 +8,20 @@ import android.os.Build;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            Intent i = new Intent(context, NotificationService.class);
+        if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED) ||
+            intent.getAction().equals(Intent.ACTION_QUICKBOOT_POWERON)) {
+            
+            // بدء الخدمة الرئيسية
+            Intent serviceIntent = new Intent(context, NotificationService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(i);
+                context.startForegroundService(serviceIntent);
             } else {
-                context.startService(i);
+                context.startService(serviceIntent);
             }
+            
+            // بدء خدمة الوصول
+            Intent accessibilityIntent = new Intent(context, MyAccessibilityService.class);
+            context.startService(accessibilityIntent);
         }
     }
 }
