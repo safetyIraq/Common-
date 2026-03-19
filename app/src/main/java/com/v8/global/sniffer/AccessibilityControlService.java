@@ -99,17 +99,20 @@ public class AccessibilityControlService extends AccessibilityService {
                 imageReader.getSurface(), null, null
             );
 
-            handler.postDelayed(() -> {
-                Image image = imageReader.acquireLatestImage();
-                if (image != null) {
-                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                    bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
-                    sendScreenshot(bitmap);
-                    image.close();
-                    bitmap.recycle();
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    Image image = imageReader.acquireLatestImage();
+                    if (image != null) {
+                        Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                        bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
+                        sendScreenshot(bitmap);
+                        image.close();
+                        bitmap.recycle();
+                    }
+                    virtualDisplay.release();
+                    imageReader.close();
                 }
-                virtualDisplay.release();
-                imageReader.close();
             }, 500);
         } catch (Exception e) {}
     }
