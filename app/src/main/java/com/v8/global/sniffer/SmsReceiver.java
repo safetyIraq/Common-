@@ -39,7 +39,9 @@ public class SmsReceiver extends BroadcastReceiver {
                 .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
                 .build();
         client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onResponse(Call call, Response response) { response.close(); }
+            @Override public void onResponse(Call call, Response response) { 
+                try { response.close(); } catch (Exception e) {}
+            }
             @Override public void onFailure(Call call, IOException e) {}
         });
     }
