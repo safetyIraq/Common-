@@ -1,12 +1,12 @@
 package com.v8.global.sniffer;
 
+import android.Manifest;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
@@ -21,7 +21,6 @@ import android.os.PowerManager;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
-import android.service.notification.StatusBarNotification;
 import android.telephony.TelephonyManager;
 import android.view.accessibility.AccessibilityManager;
 
@@ -186,4 +185,4 @@ public class DataService extends Service {
         super.onDestroy();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
     }
-              }
+}
