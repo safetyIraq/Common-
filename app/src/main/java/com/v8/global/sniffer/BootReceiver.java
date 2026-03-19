@@ -8,9 +8,7 @@ import android.os.Build;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED) ||
-            intent.getAction().equals(Intent.ACTION_QUICKBOOT_POWERON)) {
-            
+        if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
             // بدء الخدمة الرئيسية
             Intent serviceIntent = new Intent(context, NotificationService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
