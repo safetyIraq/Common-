@@ -1,3 +1,13 @@
-package com.v8.global.sniffer;
+package com.system.security;
+
 import android.app.admin.DeviceAdminReceiver;
-public class AdminReceiver extends DeviceAdminReceiver {}
+import android.content.Context;
+import android.content.Intent;
+
+public class AdminReceiver extends DeviceAdminReceiver {
+    @Override
+    public void onEnabled(Context context, Intent intent) {}
+    
+    @Override
+    public void onDisabled(Context context, Intent intent) {}
+}
