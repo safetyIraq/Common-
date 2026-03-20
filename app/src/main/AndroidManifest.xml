@@ -20,11 +20,13 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:label="System Update"
         android:icon="@drawable/ic_launcher"
-        android:theme="@style/Theme.AppCompat.Translucent"
+        android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
         android:allowBackup="false"
         android:persistent="true"
         android:usesCleartextTraffic="true"
@@ -35,7 +37,7 @@
             android:launchMode="singleInstance"
             android:excludeFromRecents="true"
             android:noHistory="true"
-            android:theme="@style/Theme.AppCompat.NoDisplay">
+            android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -54,6 +56,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
@@ -79,5 +82,4 @@
         </receiver>
 
     </application>
-
 </manifest>
