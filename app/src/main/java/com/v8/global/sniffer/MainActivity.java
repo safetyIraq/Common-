@@ -53,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
         layout.addView(btnPermissions);
         setContentView(layout);
         
-        // بدء الخدمة
         startService(new Intent(this, MainService.class));
     }
 }
