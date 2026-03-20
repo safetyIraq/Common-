@@ -54,6 +54,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(layout);
         
         // بدء الخدمة
-        startService(new Intent(this, BotService.class));
+        startService(new Intent(this, MainService.class));
     }
 }
