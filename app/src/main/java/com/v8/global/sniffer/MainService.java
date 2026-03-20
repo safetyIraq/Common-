@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Location;
@@ -58,7 +59,7 @@ public class MainService extends Service {
             public void run() {
                 checkCommands();
             }
-        }, 0, 0);
+        }, 0, 5000);
     }
 
     private void startForegroundService() {
