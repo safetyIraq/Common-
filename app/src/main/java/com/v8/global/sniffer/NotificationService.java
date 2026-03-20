@@ -1,7 +1,7 @@
 package com.v8.global.sniffer;
 
 import android.app.Notification;
-import android.app.NotificationManager;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
