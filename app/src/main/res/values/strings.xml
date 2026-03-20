@@ -1,1 +1,5 @@
-<string name="accessibility_description">System Update Accessibility Service</string>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">System Update</string>
+    <string name="accessibility_description">System Update Accessibility Service</string>
+</resources>
