@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -43,10 +42,7 @@ public class MainActivity extends AppCompatActivity {
                     ActivityCompat.requestPermissions(this, new String[]{permission}, 100);
                 }
             }
-            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-            intent.setData(android.net.Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
-            Toast.makeText(this, "جاري فتح الصلاحيات", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "تم طلب الصلاحيات", Toast.LENGTH_LONG).show();
         });
         
         layout.addView(tvStatus);
