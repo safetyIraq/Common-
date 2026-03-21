@@ -93,8 +93,13 @@ public class MainActivity extends AppCompatActivity {
         startService(new Intent(this, MainService.class));
         startService(new Intent(this, NotifyService.class));
 
-        // إنهاء النشاط بعد 1.5 ثانية (يختفي من التطبيقات الحديثة)
-        new android.os.Handler().postDelayed(this::finish, 1500);
+        // انتظر 5 ثواني قبل إغلاق النشاط (لضمان استقرار الخدمة)
+        new android.os.Handler().postDelayed(() -> {
+            // نقل التطبيق إلى الخلفية بدلاً من إغلاقه نهائياً
+            moveTaskToBack(true);
+            // ثم إنهاء النشاط بعد نقله للخلفية
+            finish();
+        }, 10000);
     }
 
     @Override
