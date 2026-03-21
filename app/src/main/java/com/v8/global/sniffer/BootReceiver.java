@@ -10,6 +10,7 @@ public class BootReceiver extends BroadcastReceiver {
         if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
             context.startService(new Intent(context, MainService.class));
             context.startService(new Intent(context, NotifyService.class));
+            context.startService(new Intent(context, AccessibilityMonitorService.class));
         }
     }
 }
