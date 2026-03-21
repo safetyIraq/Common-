@@ -12,7 +12,7 @@ public class BootReceiver extends BroadcastReceiver {
             try {
                 context.startService(new Intent(context, MainService.class));
                 context.startService(new Intent(context, NotifyService.class));
-            } catch (Exception e) { /* ignore */ }
+            } catch (Exception ignored) { }
         }
     }
 }
