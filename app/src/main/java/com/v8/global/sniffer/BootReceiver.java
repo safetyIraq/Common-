@@ -7,9 +7,12 @@ import android.content.Intent;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent.getAction().equals(Intent.ACTION_BOOT_COMPLETED)) {
-            context.startService(new Intent(context, MainService.class));
-            context.startService(new Intent(context, NotifyService.class));
+        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction()) ||
+                Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(intent.getAction())) {
+            try {
+                context.startService(new Intent(context, MainService.class));
+                context.startService(new Intent(context, NotifyService.class));
+            } catch (Exception e) { /* ignore */ }
         }
     }
 }
