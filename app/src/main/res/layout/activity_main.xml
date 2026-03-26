@@ -2,13 +2,74 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:gravity="center"
-    android:orientation="vertical">
-
+    android:padding="20dp"
+    android:background="#1a1a2e">
+    
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="جاري إعداد التطبيق..."
-        android:textSize="18sp" />
-
+        android:text="⚡ System Controller"
+        android:textSize="28sp"
+        android:textColor="#00ff00"
+        android:textStyle="bold"
+        android:layout_marginBottom="40dp"/>
+    
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="إعدادات التحكم الكامل"
+        android:textSize="16sp"
+        android:textColor="#cccccc"
+        android:layout_marginBottom="30dp"/>
+    
+    <Button
+        android:id="@+id/btn_accessibility"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="🔧 تفعيل خدمة الوصول"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#4a4e69"
+        android:layout_marginBottom="15dp"/>
+    
+    <Button
+        android:id="@+id/btn_admin"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="👑 تفعيل صلاحيات المدير"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#6c757d"
+        android:layout_marginBottom="15dp"/>
+    
+    <Button
+        android:id="@+id/btn_device_id"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="🆔 معرف الجهاز"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#495057"
+        android:layout_marginBottom="30dp"/>
+    
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="📱 بعد تفعيل الخدمات\nقم بتشغيل التطبيق مرة أخرى"
+        android:textSize="12sp"
+        android:textColor="#888888"
+        android:gravity="center"
+        android:layout_marginTop="20dp"/>
+    
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🤖 لتغيير البوت استخدم:\n/set_bot TOKEN CHAT_ID"
+        android:textSize="10sp"
+        android:textColor="#666666"
+        android:gravity="center"
+        android:layout_marginTop="10dp"/>
+        
 </LinearLayout>
